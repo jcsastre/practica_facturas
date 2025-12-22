@@ -53,7 +53,7 @@ export function UploadPage() {
 
     try {
       // Replace with your actual n8n webhook URL for upload
-      const webhookUrl = 'https://fdp-n8n.odyw27.easypanel.host/webhook-test/83fa05c6-e044-4abc-89bd-e470ff08b7d1'; 
+      const webhookUrl = 'https://fdp-n8n.odyw27.easypanel.host/webhook/83fa05c6-e044-4abc-89bd-e470ff08b7d1'; 
         
       console.log('Webhook URL:', webhookUrl); 
 
