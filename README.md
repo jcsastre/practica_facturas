@@ -15,6 +15,7 @@ Ubicado en `/workflows`. El motor lógico del sistema. El flujo más crítico es
 *   **Primer Intento (Eficiencia)**: Utiliza **GPT-4o-mini** para una extracción rápida y económica.
 *   **Validación Inteligente**: Un nodo de código verifica la coherencia matemática (Base + IVA = Total), el formato de NIFs españoles y fechas.
 *   **Segundo Intento (Rescate)**: Si la validación falla, se activa automáticamente **GPT-4o-latest** (modelo premium). Este recibe los errores exactos del primer intento y actúa como un "auditor senior" para corregir los datos antes de guardarlos.
+*   **Control de Costes**: Se ha implementado un **Rate Limiting** diario (100 peticiones para `mini` y 10 para `latest`) que bloquea el procesamiento si se excede el uso, evitando costes inesperados de la API de OpenAI.
 
 ### 3. Base de Datos (PostgreSQL)
 Ubicada en un servidor remoto. El esquema (`init.sql`) organiza la información en:

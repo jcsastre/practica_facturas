@@ -161,7 +161,7 @@ export function ExpensesPage() {
         <>
           <div className="grid">
             <div className="glass-panel" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr 1fr', padding: '1rem', fontWeight: 'bold', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              <div>Referencia / Categoría</div>
+              <div>Referencia</div>
               <div>Proveedor</div>
               <div>Fecha</div>
               <div style={{ textAlign: 'right' }}>Importe</div>
@@ -171,7 +171,7 @@ export function ExpensesPage() {
               <div key={inv.id} className="card glass-panel" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1.5fr 1fr 1fr 1fr', gap: '1rem', alignItems: 'center', padding: '1rem', borderLeft: '4px solid #ec4899' }}>
                 <div>
                   <div style={{ fontWeight: 'bold' }}>{inv.invoice_number}</div>
-                  <div style={{ fontSize: '0.75rem', color: '#f472b6' }}>{inv.category || 'Sin categoría'}</div>
+
                 </div>
                 <div>
                    <div style={{ fontWeight: '500' }}>{inv.entity_name}</div>

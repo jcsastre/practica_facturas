@@ -250,7 +250,7 @@ export function InvoicesPage() {
                   <span style={{ fontSize: '1.2rem' }}>{inv.type === 'expense' ? '📉' : '📈'}</span>
                   <div>
                      <div>{inv.invoice_number}</div>
-                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>{inv.category || 'General'}</div>
+
                   </div>
                 </div>
                 

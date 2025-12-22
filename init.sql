@@ -45,7 +45,6 @@ CREATE TABLE IF NOT EXISTS received_invoices (
     tax_rate DECIMAL(5, 2) NOT NULL,
     tax_amount DECIMAL(10, 2) NOT NULL,
     total_amount DECIMAL(10, 2) NOT NULL,
-    category VARCHAR(100),
     pdf_url TEXT,
     status VARCHAR(50) DEFAULT 'processed',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
