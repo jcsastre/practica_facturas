@@ -81,23 +81,38 @@ export function UploadPage() {
   };
 
   return (
-    <div className="card glass-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
-      <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Subir Documento</h2>
+    <div className="card glass-panel animate-fade-in" style={{ maxWidth: '700px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
+        <h2 style={{ margin: '0 0 0.5rem', fontSize: '1.75rem', fontWeight: '700' }}>Subir Documento</h2>
+        <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+          Extracción automática de datos con IA
+        </p>
+      </div>
       
-      <div className="type-selector" style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', justifyContent: 'center' }}>
+      <div style={{ 
+        display: 'flex', 
+        gap: '1rem', 
+        marginBottom: '2rem', 
+        padding: '0.5rem',
+        background: 'var(--bg-surface)',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border)'
+      }}>
         <button 
           className={`btn ${type === 'income' ? 'btn-primary' : 'btn-nav'}`}
           onClick={() => setType('income')}
-          style={{ minWidth: '120px' }}
+          style={{ flex: 1, transition: 'all 0.2s' }}
         >
-          Ingreso 📈
+          <span style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>📈</span>
+          Ingreso
         </button>
         <button 
           className={`btn ${type === 'expense' ? 'btn-primary' : 'btn-nav'}`}
           onClick={() => setType('expense')}
-          style={{ minWidth: '120px' }}
+          style={{ flex: 1, transition: 'all 0.2s' }}
         >
-          Gasto 📉
+          <span style={{ fontSize: '1.2rem', marginRight: '0.5rem' }}>📉</span>
+          Gasto
         </button>
       </div>
 
