@@ -1,0 +1,321 @@
+{
+  "updatedAt": "2025-12-21T15:59:43.655Z",
+  "createdAt": "2025-12-21T15:58:47.522Z",
+  "id": "A8a4j1ApyxAlFBR7",
+  "name": "Factu - Received Invoices",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "path": "api/received-invoices",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "3060a825-f384-4b49-9756-277f9e76cf8d",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "896278ce-ccdd-48df-a4d5-69f7a32d09ab"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n  ri.category,\n  p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
+        "options": {}
+      },
+      "id": "fbf69e63-b37a-4541-9642-3a50f211f634",
+      "name": "Get Received Invoices",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "KJPvXpEO7E9SQ6xv",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Agrupar resultados en objeto data para n8n\nreturn [{\n  json: {\n    data: $input.all().map(item => item.json)\n  }\n}];"
+      },
+      "id": "06a5e043-3a76-4988-a7d4-e646d313e293",
+      "name": "Aggregate with Code",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json.data }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "e9bb1b97-e21a-47e5-9254-ecf3c6a49103",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Received Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Received Invoices": {
+      "main": [
+        [
+          {
+            "node": "Aggregate with Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate with Code": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "c08f2d73-1214-47b8-9f14-6314d753f069",
+  "activeVersionId": "c08f2d73-1214-47b8-9f14-6314d753f069",
+  "versionCounter": 3,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2025-12-21T15:58:47.529Z",
+      "createdAt": "2025-12-21T15:58:47.529Z",
+      "role": "workflow:owner",
+      "workflowId": "A8a4j1ApyxAlFBR7",
+      "projectId": "PChSnDXpHbIycoV4",
+      "project": {
+        "updatedAt": "2025-12-09T15:11:24.630Z",
+        "createdAt": "2025-12-09T15:10:50.445Z",
+        "id": "PChSnDXpHbIycoV4",
+        "name": "Juan Carlos Sastre Iglesias <juan.carlos.sastre.iglesias@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "projectRelations": [
+          {
+            "updatedAt": "2025-12-09T15:10:50.445Z",
+            "createdAt": "2025-12-09T15:10:50.445Z",
+            "userId": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
+            "projectId": "PChSnDXpHbIycoV4",
+            "user": {
+              "updatedAt": "2025-12-21T07:38:40.000Z",
+              "createdAt": "2025-12-09T15:10:49.925Z",
+              "id": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
+              "email": "juan.carlos.sastre.iglesias@gmail.com",
+              "firstName": "Juan Carlos",
+              "lastName": "Sastre Iglesias",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-12-09T15:11:52.855Z",
+                "personalization_survey_n8n_version": "1.103.2",
+                "automationGoalDevops": [
+                  "other"
+                ],
+                "companyType": "education",
+                "role": "it"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "3fcTfRcTJhwtug2U",
+                "userActivatedAt": 1765715364784,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1765983214665
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2025-12-21",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2025-12-21T15:58:47.530Z",
+    "createdAt": "2025-12-21T15:58:47.530Z",
+    "versionId": "c08f2d73-1214-47b8-9f14-6314d753f069",
+    "workflowId": "A8a4j1ApyxAlFBR7",
+    "nodes": [
+      {
+        "parameters": {
+          "path": "api/received-invoices",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "*"
+          }
+        },
+        "id": "3060a825-f384-4b49-9756-277f9e76cf8d",
+        "name": "Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "896278ce-ccdd-48df-a4d5-69f7a32d09ab"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n  ri.category,\n  p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
+          "options": {}
+        },
+        "id": "fbf69e63-b37a-4541-9642-3a50f211f634",
+        "name": "Get Received Invoices",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          224,
+          0
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "KJPvXpEO7E9SQ6xv",
+            "name": "Postgres account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Agrupar resultados en objeto data para n8n\nreturn [{\n  json: {\n    data: $input.all().map(item => item.json)\n  }\n}];"
+        },
+        "id": "06a5e043-3a76-4988-a7d4-e646d313e293",
+        "name": "Aggregate with Code",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          448,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json.data }}",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                },
+                {
+                  "name": "Access-Control-Allow-Origin",
+                  "value": "*"
+                }
+              ]
+            }
+          }
+        },
+        "id": "e9bb1b97-e21a-47e5-9254-ecf3c6a49103",
+        "name": "Respond to Webhook",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          672,
+          0
+        ]
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Get Received Invoices",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Received Invoices": {
+        "main": [
+          [
+            {
+              "node": "Aggregate with Code",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Aggregate with Code": {
+        "main": [
+          [
+            {
+              "node": "Respond to Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Juan Carlos Sastre Iglesias",
+    "name": null,
+    "description": null
+  }
+}
