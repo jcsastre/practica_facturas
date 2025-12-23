@@ -25,3 +25,7 @@ yarn-error.log*
 # Build output
 dist/
 build/
+.vercel/
+
+# Temporary workflow files
+remote_workflow*.json
