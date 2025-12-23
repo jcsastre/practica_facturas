@@ -25,7 +25,8 @@ export function InvoicesPage() {
   const fetchInvoices = async () => {
     try {
       setLoading(true);
-      const apiUrl = 'https://fdp-n8n.odyw27.easypanel.host/webhook/api/issued-invoices';
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://fdp-n8n.odyw27.easypanel.host/webhook';
+    const apiUrl = `${apiBase}/api/issued-invoices`;
       console.log('Fetching from:', apiUrl);
       
       const res = await fetch(apiUrl);
@@ -274,7 +275,7 @@ export function InvoicesPage() {
                   color: inv.type === 'expense' ? '#f472b6' : '#4ade80'
                 }}>
                   {inv.type === 'expense' ? '-' : '+'} 
-                  {parseFloat(inv.total_amount).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                  {new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(Number(inv.total_amount || 0))}
                 </div>
 
                 <div style={{ textAlign: 'center' }}>

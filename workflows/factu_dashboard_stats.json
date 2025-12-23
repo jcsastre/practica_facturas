@@ -1,0 +1,153 @@
+{
+  "name": "Factu - Dashboard Stats",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "api/dashboard-stats",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "e96901f6-9c4c-4a3e-9080-87779fdf830c",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        160,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT total_amount, tax_amount, issue_date FROM issued_invoices;",
+        "options": {}
+      },
+      "id": "58338988-cb9b-43d9-9524-7667a216c802",
+      "name": "Get Issued",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        380,
+        140
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "KJPvXpEO7E9SQ6xv",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT total_amount, tax_amount, issue_date FROM received_invoices;",
+        "options": {}
+      },
+      "id": "89b5377f-561b-4014-9964-b816022e7240",
+      "name": "Get Received",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        380,
+        340
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "KJPvXpEO7E9SQ6xv",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const issuedInvoices = $(\"Get Issued\").all();\nconst receivedInvoices = $(\"Get Received\").all();\n\nlet stats = {\n  total_income: 0,\n  total_expenses: 0,\n  quarters: {\n    \"Q1\": { income_vat: 0, expense_vat: 0 },\n    \"Q2\": { income_vat: 0, expense_vat: 0 },\n    \"Q3\": { income_vat: 0, expense_vat: 0 },\n    \"Q4\": { income_vat: 0, expense_vat: 0 }\n  }\n};\n\nconst getQuarter = (dateStr) => {\n  if (!dateStr) return 'Q1';\n  const date = new Date(dateStr);\n  const month = date.getMonth();\n  if (month < 3) return 'Q1';\n  if (month < 6) return 'Q2';\n  if (month < 9) return 'Q3';\n  return 'Q4';\n};\n\nissuedInvoices.forEach(item => {\n  const inv = item.json;\n  stats.total_income += parseFloat(inv.total_amount || 0);\n  const q = getQuarter(inv.issue_date);\n  stats.quarters[q].income_vat += parseFloat(inv.tax_amount || 0);\n});\n\nreceivedInvoices.forEach(item => {\n  const inv = item.json;\n  stats.total_expenses += parseFloat(inv.total_amount || 0);\n  const q = getQuarter(inv.issue_date);\n  stats.quarters[q].expense_vat += parseFloat(inv.tax_amount || 0);\n});\n\nconst quarterlyStats = Object.keys(stats.quarters).map(key => ({\n  quarter: key,\n  income_vat: stats.quarters[key].income_vat,\n  expense_vat: stats.quarters[key].expense_vat,\n  balance: stats.quarters[key].income_vat - stats.quarters[key].expense_vat\n}));\n\nreturn {\n  json: {\n    stats: {\n      total_income: stats.total_income,\n      total_expenses: stats.total_expenses,\n      net_profit: stats.total_income - stats.total_expenses,\n      vat_to_pay: quarterlyStats.reduce((acc, q) => acc + q.balance, 0)\n    },\n    quarterly_vat: quarterlyStats\n  }\n};"
+      },
+      "id": "9934273c-6211-4489-bed2-697529c0b6be",
+      "name": "Aggregate Stats",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              }
+            ]
+          }
+        }
+      },
+      "id": "45253e6a-37c1-4eae-8cef-55949e169235",
+      "name": "Respond Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        840,
+        240
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Issued",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Received",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Issued": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Received": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Stats": {
+      "main": [
+        [
+          {
+            "node": "Respond Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,1 +1,1387 @@
-{"updatedAt":"2025-12-22T17:38:30.012Z","createdAt":"2025-12-20T16:16:04.929Z","id":"5NuwkfihaBtnxSpm","name":"Factu - Upload PDF","description":null,"active":true,"isArchived":false,"nodes":[{"parameters":{"httpMethod":"POST","path":"83fa05c6-e044-4abc-89bd-e470ff08b7d1","responseMode":"responseNode","options":{"allowedOrigins":"*"}},"type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[160,3712],"id":"c3a44ecf-3530-4a6c-84ec-0bc7ee63e658","name":"Webhook","webhookId":"83fa05c6-e044-4abc-89bd-e470ff08b7d1"},{"parameters":{"resource":"file","binaryPropertyName":"file","options":{}},"type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.1,"position":[352,3536],"id":"1f81f246-1f6f-45f2-9ed0-6012e8f5ec1c","name":"Upload a file","credentials":{"openAiApi":{"id":"HEQLOqeHtzWHpu4h","name":"OpenAi account"}}},{"parameters":{"modelId":{"__rl":true,"value":"={{ $json.target_model }}","mode":"id"},"responses":{"values":[{"type":"file","fileType":"fileId","fileId":"={{ $json.file_id }}"},{"content":"={{ $json.enhanced_prompt }}"}]},"builtInTools":{},"options":{"textFormat":{"textOptions":{"type":"json_object"}}}},"type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.1,"position":[1024,3456],"id":"e843c528-552f-4d28-b3f2-0179ed379ccc","name":"Message a model","credentials":{"openAiApi":{"id":"HEQLOqeHtzWHpu4h","name":"OpenAi account"}}},{"parameters":{"operation":"executeQuery","query":"INSERT INTO issued_invoices (client_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, status) \nVALUES ($1, $2, $3, $4, $5, $6, $7, 'processed')\nON CONFLICT (invoice_number) \nDO UPDATE SET \n    total_amount = EXCLUDED.total_amount,\n    base_amount = EXCLUDED.base_amount,\n    tax_amount = EXCLUDED.tax_amount,\n    issue_date = EXCLUDED.issue_date,\n    status = 'processed';","options":{"queryReplacement":"={{ $node[\"Upsert Client\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }}"}},"id":"019a518e-4b1d-4cda-a620-d602d2bab570","name":"Postgres Invoices","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2720,3648],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"operation":"executeQuery","query":"INSERT INTO clients (nif_cif, name, address) VALUES ($1, $2, $3) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3 RETURNING id;","options":{"queryReplacement":"={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }}"}},"id":"f46bf79f-621f-4f51-a191-45b5e262a711","name":"Upsert Client","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2496,3648],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"rules":{"values":[{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":3},"conditions":[{"leftValue":"={{ $json.type }}","rightValue":"income","operator":{"type":"string","operation":"equals"},"id":"4e1c4cf8-9b50-4246-8c41-9133b84b0759"}],"combinator":"and"}},{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":3},"conditions":[{"id":"90c33410-d1ce-4ca3-a959-3248c95dd850","leftValue":"={{ $json.type }}","rightValue":"expense","operator":{"type":"string","operation":"equals"}}],"combinator":"and"}}]},"options":{}},"type":"n8n-nodes-base.switch","typeVersion":3.4,"position":[2272,3744],"id":"07702448-f205-4580-92bd-0c06952a1e1e","name":"Switch"},{"parameters":{"operation":"executeQuery","query":"INSERT INTO providers (nif_cif, name, address, email) VALUES ($1, $2, $3, $4) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3, email = $4 RETURNING id;","options":{"queryReplacement":"={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }},{{ $json.third_party.email }}"}},"id":"cc738fa9-749c-40b3-be03-d33663d258a7","name":"Upsert Provider","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2496,3840],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"operation":"executeQuery","query":"INSERT INTO received_invoices (provider_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, category, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processed');","options":{"queryReplacement":"={{ $node[\"Upsert Provider\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }},{{ $('Format OpenAI response').item.json.category }}"}},"id":"eae36a6c-46af-48f3-8d7a-e9e187fab702","name":"Postgres Received Invoices","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2720,3840],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"jsCode":"// ============================================\n// NODO DE VALIDACIÓN CON SISTEMA DE REINTENTOS\n// ============================================\n\nconst data = $input.first().json;\nconst MAX_RETRIES = 1; // Máximo 1 reintento (total 2 intentos)\nconst retryCount = data.retry_count || 0;\n\n// Array para acumular errores encontrados\nconst validationErrors = [];\n\n// ============================================\n// 1. VALIDACIÓN DE ESQUEMA (Campos requeridos)\n// ============================================\n\n// Verificar que existe el campo 'type'\nif (!data.type || !['income', 'expense'].includes(data.type)) {\n  validationErrors.push('El campo \"type\" debe ser \"income\" o \"expense\"');\n}\n\n// Verificar que existe third_party\nif (!data.third_party || typeof data.third_party !== 'object') {\n  validationErrors.push('Falta el objeto \"third_party\" con los datos del cliente/proveedor');\n} else {\n  // Validar campos dentro de third_party\n  const thirdPartyFields = ['name', 'nif', 'address'];\n  const missingThirdParty = thirdPartyFields.filter(field => {\n    const value = data.third_party[field];\n    return value === undefined || value === null || value === '';\n  });\n  \n  if (missingThirdParty.length > 0) {\n    validationErrors.push(`Campos faltantes en third_party: ${missingThirdParty.join(', ')}`);\n  }\n}\n\n// Validar campos de la factura (fuera de third_party)\nconst invoiceFields = ['invoice_number', 'issue_date', 'base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nconst missingInvoice = invoiceFields.filter(field => {\n  const value = data[field];\n  return value === undefined || value === null || value === '';\n});\n\nif (missingInvoice.length > 0) {\n  validationErrors.push(`Campos faltantes de factura: ${missingInvoice.join(', ')}`);\n}\n\n// Validar campo category solo para gastos\nif (data.type === 'expense' && (!data.category || data.category === '')) {\n  validationErrors.push('El campo \"category\" es obligatorio para facturas de tipo \"expense\"');\n}\n\n// ============================================\n// 2. VALIDACIÓN DE TIPOS DE DATOS\n// ============================================\n\n// Validar que los importes sean números válidos\nconst numericFields = ['base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nfor (const field of numericFields) {\n  if (data[field] !== undefined) {\n    const value = parseFloat(data[field]);\n    if (isNaN(value)) {\n      validationErrors.push(`El campo \"${field}\" debe ser un número (recibido: \"${data[field]}\")`);\n    } else if (value < 0) {\n      validationErrors.push(`El campo \"${field}\" no puede ser negativo`);\n    }\n  }\n}\n\n// ============================================\n// 3. VALIDACIÓN DE FORMATOS\n// ============================================\n\n// Validar formato de fecha (YYYY-MM-DD)\nif (data.issue_date) {\n  const dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\n  if (!dateRegex.test(data.issue_date)) {\n    validationErrors.push(`La fecha \"${data.issue_date}\" debe tener formato YYYY-MM-DD (ej: 2025-01-15)`);\n  } else {\n    // Verificar que sea una fecha válida\n    const date = new Date(data.issue_date);\n    if (isNaN(date.getTime())) {\n      validationErrors.push(`La fecha \"${data.issue_date}\" no es válida`);\n    }\n  }\n}\n\n// Validar formato de NIF/CIF español (letra + 8 dígitos)\nif (data.third_party && data.third_party.nif) {\n  const nifRegex = /^[A-Z]\\d{8}$/;\n  if (!nifRegex.test(data.third_party.nif)) {\n    validationErrors.push(`El NIF/CIF \"${data.third_party.nif}\" debe tener formato válido (ej: B12345678)`);\n  }\n}\n\n// ============================================\n// 4. VALIDACIÓN DE COHERENCIA MATEMÁTICA\n// ============================================\n\nif (data.base_amount && data.tax_amount && data.total_amount) {\n  const base = parseFloat(data.base_amount);\n  const tax = parseFloat(data.tax_amount);\n  const total = parseFloat(data.total_amount);\n  \n  if (!isNaN(base) && !isNaN(tax) && !isNaN(total)) {\n    // Verificar que base + IVA = total (con tolerancia de 2 céntimos)\n    const calculatedTotal = base + tax;\n    const difference = Math.abs(calculatedTotal - total);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `Incoherencia matemática: base (${base.toFixed(2)}) + IVA (${tax.toFixed(2)}) = ${calculatedTotal.toFixed(2)}, ` +\n        `pero el total declarado es ${total.toFixed(2)} (diferencia: ${difference.toFixed(2)}€)`\n      );\n    }\n  }\n}\n\n// Validar que el IVA calculado coincide con la tasa\nif (data.base_amount && data.tax_rate && data.tax_amount) {\n  const base = parseFloat(data.base_amount);\n  const rate = parseFloat(data.tax_rate);\n  const declaredTax = parseFloat(data.tax_amount);\n  \n  if (!isNaN(base) && !isNaN(rate) && !isNaN(declaredTax)) {\n    const calculatedTax = base * (rate / 100);\n    const difference = Math.abs(calculatedTax - declaredTax);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `El IVA calculado (${calculatedTax.toFixed(2)}€ = ${base}€ × ${rate}%) ` +\n        `no coincide con el declarado (${declaredTax}€)`\n      );\n    }\n  }\n}\n\n// ============================================\n// 5. VALIDACIÓN DE RANGOS RAZONABLES\n// ============================================\n\n// Verificar que la tasa de IVA sea válida en España (0%, 4%, 10%, 21%)\nconst validTaxRates = [0, 4, 10, 21];\nif (data.tax_rate) {\n  const rate = parseFloat(data.tax_rate);\n  if (!isNaN(rate) && !validTaxRates.includes(rate)) {\n    validationErrors.push(\n      `La tasa de IVA ${rate}% no es estándar en España. ` +\n      `Tasas válidas: ${validTaxRates.join('%, ')}%`\n    );\n  }\n}\n\n// Verificar que el importe total no sea excesivamente alto (posible error de OCR)\nif (data.total_amount) {\n  const total = parseFloat(data.total_amount);\n  if (!isNaN(total) && total > 1000000) {\n    validationErrors.push(\n      `El importe total (${total.toFixed(2)}€) parece excesivamente alto. ` +\n      `Por favor, verifica que sea correcto.`\n    );\n  }\n}\n\n// ============================================\n// 6. DECISIÓN FINAL\n// ============================================\n\nif (validationErrors.length > 0) {\n  // HAY ERRORES - Preparar para reintento o fallo final\n  return {\n    json: {\n      validation_status: 'failed',\n      validation_errors: validationErrors,\n      retry_count: retryCount,\n      can_retry: retryCount < MAX_RETRIES,\n      original_data: data,\n      failed_at: new Date().toISOString()\n    }\n  };\n} else {\n  // VALIDACIÓN EXITOSA\n  return {\n    json: {\n      ...data,\n      validation_status: 'success',\n      validated_at: new Date().toISOString(),\n      retry_count: retryCount\n    }\n  };\n}"},"name":"Validate AI Response","type":"n8n-nodes-base.code","typeVersion":2,"position":[1600,3584],"id":"122512fe-6211-4c89-bed2-697529c0b6be"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"condition-1","leftValue":"={{ $json.validation_status }}","rightValue":"failed","operator":{"type":"string","operation":"equals"}},{"id":"condition-2","leftValue":"={{ $json.can_retry }}","rightValue":true,"operator":{"type":"boolean","operation":"true"}}],"combinator":"and"},"options":{}},"name":"Check Validation Status","type":"n8n-nodes-base.if","typeVersion":2,"position":[1824,3584],"id":"d23a3f90-6e47-4dbb-867d-82d2854bfead"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"success-condition","leftValue":"={{ $json.validation_status }}","rightValue":"success","operator":{"type":"string","operation":"equals"}}],"combinator":"and"},"options":{}},"name":"Is Validation Success?","type":"n8n-nodes-base.if","typeVersion":2,"position":[2048,3776],"id":"cc55100f-bc4f-43a4-85d0-be227930b4d0"},{"parameters":{"respondWith":"json","responseBody":"=={{ {\n  \"success\": false,\n  \"message\": \"No se han podido extraer los datos automáticamente tras \" + ($json.retry_count + 1) + \" intentos. Por favor, introduce la información de esta factura manualmente.\",\n  \"errors\": $json.validation_errors,\n  \"retry_count\": $json.retry_count + 1,\n  \"suggestion\": \"Introduce los datos manualmente en el panel de Ingresos/Gastos.\",\n  \"timestamp\": $now.toISO()\n} }}","options":{"responseHeaders":{"entries":[{"name":"Content-Type","value":"application/json"}]}}},"name":"Respond Error","type":"n8n-nodes-base.respondToWebhook","typeVersion":1,"position":[2272,3936],"id":"45253e6a-37c1-4eae-8cef-55949e169235"},{"parameters":{"respondWith":"json","responseBody":"={\n  \"success\": true,\n  \"message\": \"Factura procesada y guardada correctamente\"\n}","options":{"responseHeaders":{"entries":[{"name":"Content-Type","value":"application/json"}]}}},"name":"Respond Success","type":"n8n-nodes-base.respondToWebhook","typeVersion":1,"position":[2944,3744],"id":"69ca6161-2662-4165-b960-a56028d255c5"},{"parameters":{"jsCode":"// Cogemos el objeto de la factura directamente desde la respuesta de OpenAI\nconst invoiceData = $input.all()[0].json.output[0].content[0].text;\n\n// Recuperamos el tipo (income/expense) que viene del envío inicial del frontend\nconst type = $('Webhook').first().json.body.type;\n\n// Recuperamos el retry_count que definió el nodo \"Build Retry Prompt\" en este ciclo\nlet retryCount = 0;\ntry {\n  retryCount = $('Build Prompt & Rate Limit').first().json.retry_count || 0;\n} catch (e) {\n  retryCount = 0;\n}\n\n// Inyectamos los metadatos necesarios para el nodo de validación\ninvoiceData.type = type;\ninvoiceData.retry_count = retryCount;\n\nreturn invoiceData;"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[1376,3584],"id":"e499390e-2a55-4c29-be11-ce5ad08879a1","name":"Format OpenAI response"},{"parameters":{"jsCode":"// ===========================================\n// BUILD PROMPT + RATE LIMITER INTEGRADO\n// ===========================================\n\n// 📊 CONFIGURACIÓN DE LÍMITES DIARIOS\nconst LIMITS = {\n  \"gpt-4o-mini\": 100,\n  \"chatgpt-4o-latest\": 5\n};\n\n// 🔍 PARTE 1: DETECCIÓN DE CONTEXTO Y RATE LIMITING\nlet validationData = null;\nlet retryCount = 0;\n\ntry {\n  validationData = $(\"Check Validation Status\").first().json;\n  retryCount = (validationData.retry_count || 0) + 1;\n} catch (e) {\n  retryCount = 0;\n}\n\nconst targetModel = retryCount > 0 ? \"chatgpt-4o-latest\" : \"gpt-4o-mini\";\n\n// 💾 Gestión de Static Data para Rate Limiting\nconst staticData = $getWorkflowStaticData('global');\nconst today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD\n\n// 🔄 Reset automático a medianoche\nif (!staticData.lastResetDate || staticData.lastResetDate !== today) {\n  staticData.lastResetDate = today;\n  staticData.counts = {\n    \"gpt-4o-mini\": 0,\n    \"chatgpt-4o-latest\": 0\n  };\n}\n\n// ⚠️ VERIFICAR LÍMITE\nconst currentCount = staticData.counts[targetModel] || 0;\nconst maxLimit = LIMITS[targetModel];\n\nif (currentCount >= maxLimit) {\n  throw new Error(JSON.stringify({\n    type: \"RATE_LIMIT_EXCEEDED\",\n    model: targetModel,\n    current: currentCount,\n    limit: maxLimit,\n    message: `Límite diario alcanzado para ${targetModel}: ${currentCount}/${maxLimit} peticiones. Intenta mañana o introduce los datos manualmente.`\n  }));\n}\n\n// ✅ Incrementar contador\nstaticData.counts[targetModel] = currentCount + 1;\n\n// 📝 PARTE 2: CONSTRUCCIÓN DEL PROMPT\nconst errors = validationData?.validation_errors || [];\n\nlet prompt = `Eres un experto en contabilidad española. Analiza esta factura y extrae los datos en formato JSON.\n\n**REGLAS CRÍTICAS DE EXTRACCIÓN:**\n1. ⚠️ **IMPORTANTE:** Si no encuentras un dato, usa el valor null. **PROHIBIDO** usar textos como \"Not provided\", \"N/A\", \"Unknown\" o similares.\n2. INVOICE_NUMBER: Busca el número de factura. Diferéncialo de la fecha. Suele estar etiquetado como 'Factura nº', 'Nº Doc', etc.\n3. ISSUE_DATE: La fecha de emisión siempre en formato YYYY-MM-DD.\n4. TAX_RATE: Solo el número (0, 4, 10 o 21).\n5. CATEGORY: Solo si type=expense. Ej: Suministros, Alquiler, Gestoría, etc.\n\n**ESTRUCTURA JSON:**\n{\n  \"type\": \"income\" o \"expense\",\n  \"third_party\": {\n    \"name\": \"Nombre fiscal o null\",\n    \"nif\": \"NIF/CIF o null\",\n    \"address\": \"Dirección completa o null\"\n  },\n  \"invoice_number\": \"String o null\",\n  \"issue_date\": \"YYYY-MM-DD o null\",\n  \"base_amount\": número o null,\n  \"tax_rate\": número o null,\n  \"tax_amount\": número o null,\n  \"total_amount\": número o null,\n  \"category\": \"String o null\"\n}`;\n\n// 🔁 Si es un reintento, añadir instrucciones de corrección\nif (retryCount > 0) {\n  prompt = `⚠️ INSTRUCCIONES DE AUDITORÍA (RESURRECCIÓN DE DATOS):\nEl intento anterior falló. Ahora, como auditor senior, debes corregir estos errores detectados:\n\n${errors.map((err, i) => `${i + 1}. ❌ ${err}`).join('\\n')}\n\n**ANÁLISIS DE CORRECCIÓN:**\n- Especial atención: Si antes pusiste \"Not provided\", ahora busca mejor o pon null si realmente no existe.\n- ¿Se ha confundido la Fecha con el Número de Factura?\n- Re-calcula: Base imponible + IVA debe sumar exactamente el Total.\n- Identidad: El NIF debe ser el de la OTRA parte (cliente o proveedor).\n\n${prompt}`;\n}\n\n// 📤 SALIDA\nreturn {\n  json: {\n    enhanced_prompt: prompt,\n    retry_count: retryCount,\n    file_id: $(\"Upload a file\").first().json.id,\n    target_model: targetModel,\n    // 📊 Info de uso (para monitoreo)\n    _rate_limit_info: {\n      model: targetModel,\n      usage: staticData.counts[targetModel],\n      limit: maxLimit,\n      remaining: maxLimit - staticData.counts[targetModel],\n      date: today\n    }\n  }\n};\n"},"name":"Build Prompt & Rate Limit","type":"n8n-nodes-base.code","typeVersion":2,"position":[624,3584],"id":"220a13a7-b85c-4833-8a23-646df63d251d","retryOnFail":false,"onError":"continueRegularOutput"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":3},"conditions":[{"id":"6c129aeb-931f-41cc-9c9e-d139847f31a2","leftValue":"={{ $json.error }}","rightValue":"","operator":{"type":"string","operation":"notEmpty","singleValue":true}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2.3,"position":[784,3456],"id":"79da9155-e8a1-435c-a2be-db6370903413","name":"If"},{"parameters":{"respondWith":"json","responseBody":"{\n  \"success\": false,\n  \"message\": \"Has alcanzado el límite de procesamiento diario\",\n  \"detail\": \"Por favor, intenta de nuevo mañana o introduce los datos de la factura manualmente\",\n  \"error_type\": \"rate_limit_exceeded\",\n  \"limits\": {\n    \"gpt-4o-mini\": \"100 peticiones/día\",\n    \"gpt-4o-latest\": \"10 peticiones/día\"\n  },\n  \"retry_after\": \"Mañana a las 00:00\"\n}","options":{"responseCode":429,"responseHeaders":{"entries":[{"name":"Retry-After","value":"86400"}]}}},"type":"n8n-nodes-base.respondToWebhook","typeVersion":1.5,"position":[1008,3280],"id":"2b4f95fe-0ac7-4248-bfd8-a4f534213765","name":"Respond Rate Limit Error"}],"connections":{"Webhook":{"main":[[{"node":"Upload a file","type":"main","index":0}]]},"Upload a file":{"main":[[{"node":"Build Prompt & Rate Limit","type":"main","index":0}]]},"Message a model":{"main":[[{"node":"Format OpenAI response","type":"main","index":0}]]},"Upsert Client":{"main":[[{"node":"Postgres Invoices","type":"main","index":0}]]},"Switch":{"main":[[{"node":"Upsert Client","type":"main","index":0}],[{"node":"Upsert Provider","type":"main","index":0}]]},"Upsert Provider":{"main":[[{"node":"Postgres Received Invoices","type":"main","index":0}]]},"Validate AI Response":{"main":[[{"node":"Check Validation Status","type":"main","index":0}]]},"Check Validation Status":{"main":[[{"node":"Build Prompt & Rate Limit","type":"main","index":0}],[{"node":"Is Validation Success?","type":"main","index":0}]]},"Is Validation Success?":{"main":[[{"node":"Switch","type":"main","index":0}],[{"node":"Respond Error","type":"main","index":0}]]},"Postgres Received Invoices":{"main":[[{"node":"Respond Success","type":"main","index":0}]]},"Postgres Invoices":{"main":[[{"node":"Respond Success","type":"main","index":0}]]},"Format OpenAI response":{"main":[[{"node":"Validate AI Response","type":"main","index":0}]]},"Build Prompt & Rate Limit":{"main":[[{"node":"If","type":"main","index":0}]]},"If":{"main":[[{"node":"Respond Rate Limit Error","type":"main","index":0}],[{"node":"Message a model","type":"main","index":0}]]}},"settings":{"executionOrder":"v1","callerPolicy":"workflowsFromSameOwner","availableInMCP":false},"staticData":{"global":{"lastResetDate":"2025-12-22","counts":{"gpt-4o-mini":6,"chatgpt-4o-latest":5}}},"meta":null,"pinData":{},"versionId":"6f3383ff-82b5-4bf3-875d-f17bb87bdde1","activeVersionId":"6f3383ff-82b5-4bf3-875d-f17bb87bdde1","versionCounter":116,"triggerCount":1,"shared":[{"updatedAt":"2025-12-20T16:16:04.937Z","createdAt":"2025-12-20T16:16:04.937Z","role":"workflow:owner","workflowId":"5NuwkfihaBtnxSpm","projectId":"PChSnDXpHbIycoV4","project":{"updatedAt":"2025-12-09T15:11:24.630Z","createdAt":"2025-12-09T15:10:50.445Z","id":"PChSnDXpHbIycoV4","name":"Juan Carlos Sastre Iglesias <juan.carlos.sastre.iglesias@gmail.com>","type":"personal","icon":null,"description":null,"projectRelations":[{"updatedAt":"2025-12-09T15:10:50.445Z","createdAt":"2025-12-09T15:10:50.445Z","userId":"d2dd8e60-551d-49af-96b4-f38e848d31bd","projectId":"PChSnDXpHbIycoV4","user":{"updatedAt":"2025-12-22T08:15:45.000Z","createdAt":"2025-12-09T15:10:49.925Z","id":"d2dd8e60-551d-49af-96b4-f38e848d31bd","email":"juan.carlos.sastre.iglesias@gmail.com","firstName":"Juan Carlos","lastName":"Sastre Iglesias","personalizationAnswers":{"version":"v4","personalization_survey_submitted_at":"2025-12-09T15:11:52.855Z","personalization_survey_n8n_version":"1.103.2","automationGoalDevops":["other"],"companyType":"education","role":"it"},"settings":{"userActivated":true,"easyAIWorkflowOnboarded":true,"firstSuccessfulWorkflowId":"3fcTfRcTJhwtug2U","userActivatedAt":1765715364784,"npsSurvey":{"responded":true,"lastShownAt":1765983214665}},"disabled":false,"mfaEnabled":false,"lastActiveAt":"2025-12-22","isPending":false}}]}}],"tags":[],"activeVersion":{"updatedAt":"2025-12-22T17:38:30.014Z","createdAt":"2025-12-22T17:38:30.014Z","versionId":"6f3383ff-82b5-4bf3-875d-f17bb87bdde1","workflowId":"5NuwkfihaBtnxSpm","nodes":[{"parameters":{"httpMethod":"POST","path":"83fa05c6-e044-4abc-89bd-e470ff08b7d1","responseMode":"responseNode","options":{"allowedOrigins":"*"}},"type":"n8n-nodes-base.webhook","typeVersion":2.1,"position":[160,3712],"id":"c3a44ecf-3530-4a6c-84ec-0bc7ee63e658","name":"Webhook","webhookId":"83fa05c6-e044-4abc-89bd-e470ff08b7d1"},{"parameters":{"resource":"file","binaryPropertyName":"file","options":{}},"type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.1,"position":[352,3536],"id":"1f81f246-1f6f-45f2-9ed0-6012e8f5ec1c","name":"Upload a file","credentials":{"openAiApi":{"id":"HEQLOqeHtzWHpu4h","name":"OpenAi account"}}},{"parameters":{"modelId":{"__rl":true,"value":"={{ $json.target_model }}","mode":"id"},"responses":{"values":[{"type":"file","fileType":"fileId","fileId":"={{ $json.file_id }}"},{"content":"={{ $json.enhanced_prompt }}"}]},"builtInTools":{},"options":{"textFormat":{"textOptions":{"type":"json_object"}}}},"type":"@n8n/n8n-nodes-langchain.openAi","typeVersion":2.1,"position":[1024,3456],"id":"e843c528-552f-4d28-b3f2-0179ed379ccc","name":"Message a model","credentials":{"openAiApi":{"id":"HEQLOqeHtzWHpu4h","name":"OpenAi account"}}},{"parameters":{"operation":"executeQuery","query":"INSERT INTO issued_invoices (client_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, status) \nVALUES ($1, $2, $3, $4, $5, $6, $7, 'processed')\nON CONFLICT (invoice_number) \nDO UPDATE SET \n    total_amount = EXCLUDED.total_amount,\n    base_amount = EXCLUDED.base_amount,\n    tax_amount = EXCLUDED.tax_amount,\n    issue_date = EXCLUDED.issue_date,\n    status = 'processed';","options":{"queryReplacement":"={{ $node[\"Upsert Client\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }}"}},"id":"019a518e-4b1d-4cda-a620-d602d2bab570","name":"Postgres Invoices","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2720,3648],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"operation":"executeQuery","query":"INSERT INTO clients (nif_cif, name, address) VALUES ($1, $2, $3) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3 RETURNING id;","options":{"queryReplacement":"={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }}"}},"id":"f46bf79f-621f-4f51-a191-45b5e262a711","name":"Upsert Client","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2496,3648],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"rules":{"values":[{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":3},"conditions":[{"leftValue":"={{ $json.type }}","rightValue":"income","operator":{"type":"string","operation":"equals"},"id":"4e1c4cf8-9b50-4246-8c41-9133b84b0759"}],"combinator":"and"}},{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":3},"conditions":[{"id":"90c33410-d1ce-4ca3-a959-3248c95dd850","leftValue":"={{ $json.type }}","rightValue":"expense","operator":{"type":"string","operation":"equals"}}],"combinator":"and"}}]},"options":{}},"type":"n8n-nodes-base.switch","typeVersion":3.4,"position":[2272,3744],"id":"07702448-f205-4580-92bd-0c06952a1e1e","name":"Switch"},{"parameters":{"operation":"executeQuery","query":"INSERT INTO providers (nif_cif, name, address, email) VALUES ($1, $2, $3, $4) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3, email = $4 RETURNING id;","options":{"queryReplacement":"={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }},{{ $json.third_party.email }}"}},"id":"cc738fa9-749c-40b3-be03-d33663d258a7","name":"Upsert Provider","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2496,3840],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"operation":"executeQuery","query":"INSERT INTO received_invoices (provider_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, category, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'processed');","options":{"queryReplacement":"={{ $node[\"Upsert Provider\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }},{{ $('Format OpenAI response').item.json.category }}"}},"id":"eae36a6c-46af-48f3-8d7a-e9e187fab702","name":"Postgres Received Invoices","type":"n8n-nodes-base.postgres","typeVersion":2.4,"position":[2720,3840],"credentials":{"postgres":{"id":"KJPvXpEO7E9SQ6xv","name":"Postgres account"}}},{"parameters":{"jsCode":"// ============================================\n// NODO DE VALIDACIÓN CON SISTEMA DE REINTENTOS\n// ============================================\n\nconst data = $input.first().json;\nconst MAX_RETRIES = 1; // Máximo 1 reintento (total 2 intentos)\nconst retryCount = data.retry_count || 0;\n\n// Array para acumular errores encontrados\nconst validationErrors = [];\n\n// ============================================\n// 1. VALIDACIÓN DE ESQUEMA (Campos requeridos)\n// ============================================\n\n// Verificar que existe el campo 'type'\nif (!data.type || !['income', 'expense'].includes(data.type)) {\n  validationErrors.push('El campo \"type\" debe ser \"income\" o \"expense\"');\n}\n\n// Verificar que existe third_party\nif (!data.third_party || typeof data.third_party !== 'object') {\n  validationErrors.push('Falta el objeto \"third_party\" con los datos del cliente/proveedor');\n} else {\n  // Validar campos dentro de third_party\n  const thirdPartyFields = ['name', 'nif', 'address'];\n  const missingThirdParty = thirdPartyFields.filter(field => {\n    const value = data.third_party[field];\n    return value === undefined || value === null || value === '';\n  });\n  \n  if (missingThirdParty.length > 0) {\n    validationErrors.push(`Campos faltantes en third_party: ${missingThirdParty.join(', ')}`);\n  }\n}\n\n// Validar campos de la factura (fuera de third_party)\nconst invoiceFields = ['invoice_number', 'issue_date', 'base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nconst missingInvoice = invoiceFields.filter(field => {\n  const value = data[field];\n  return value === undefined || value === null || value === '';\n});\n\nif (missingInvoice.length > 0) {\n  validationErrors.push(`Campos faltantes de factura: ${missingInvoice.join(', ')}`);\n}\n\n// Validar campo category solo para gastos\nif (data.type === 'expense' && (!data.category || data.category === '')) {\n  validationErrors.push('El campo \"category\" es obligatorio para facturas de tipo \"expense\"');\n}\n\n// ============================================\n// 2. VALIDACIÓN DE TIPOS DE DATOS\n// ============================================\n\n// Validar que los importes sean números válidos\nconst numericFields = ['base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nfor (const field of numericFields) {\n  if (data[field] !== undefined) {\n    const value = parseFloat(data[field]);\n    if (isNaN(value)) {\n      validationErrors.push(`El campo \"${field}\" debe ser un número (recibido: \"${data[field]}\")`);\n    } else if (value < 0) {\n      validationErrors.push(`El campo \"${field}\" no puede ser negativo`);\n    }\n  }\n}\n\n// ============================================\n// 3. VALIDACIÓN DE FORMATOS\n// ============================================\n\n// Validar formato de fecha (YYYY-MM-DD)\nif (data.issue_date) {\n  const dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\n  if (!dateRegex.test(data.issue_date)) {\n    validationErrors.push(`La fecha \"${data.issue_date}\" debe tener formato YYYY-MM-DD (ej: 2025-01-15)`);\n  } else {\n    // Verificar que sea una fecha válida\n    const date = new Date(data.issue_date);\n    if (isNaN(date.getTime())) {\n      validationErrors.push(`La fecha \"${data.issue_date}\" no es válida`);\n    }\n  }\n}\n\n// Validar formato de NIF/CIF español (letra + 8 dígitos)\nif (data.third_party && data.third_party.nif) {\n  const nifRegex = /^[A-Z]\\d{8}$/;\n  if (!nifRegex.test(data.third_party.nif)) {\n    validationErrors.push(`El NIF/CIF \"${data.third_party.nif}\" debe tener formato válido (ej: B12345678)`);\n  }\n}\n\n// ============================================\n// 4. VALIDACIÓN DE COHERENCIA MATEMÁTICA\n// ============================================\n\nif (data.base_amount && data.tax_amount && data.total_amount) {\n  const base = parseFloat(data.base_amount);\n  const tax = parseFloat(data.tax_amount);\n  const total = parseFloat(data.total_amount);\n  \n  if (!isNaN(base) && !isNaN(tax) && !isNaN(total)) {\n    // Verificar que base + IVA = total (con tolerancia de 2 céntimos)\n    const calculatedTotal = base + tax;\n    const difference = Math.abs(calculatedTotal - total);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `Incoherencia matemática: base (${base.toFixed(2)}) + IVA (${tax.toFixed(2)}) = ${calculatedTotal.toFixed(2)}, ` +\n        `pero el total declarado es ${total.toFixed(2)} (diferencia: ${difference.toFixed(2)}€)`\n      );\n    }\n  }\n}\n\n// Validar que el IVA calculado coincide con la tasa\nif (data.base_amount && data.tax_rate && data.tax_amount) {\n  const base = parseFloat(data.base_amount);\n  const rate = parseFloat(data.tax_rate);\n  const declaredTax = parseFloat(data.tax_amount);\n  \n  if (!isNaN(base) && !isNaN(rate) && !isNaN(declaredTax)) {\n    const calculatedTax = base * (rate / 100);\n    const difference = Math.abs(calculatedTax - declaredTax);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `El IVA calculado (${calculatedTax.toFixed(2)}€ = ${base}€ × ${rate}%) ` +\n        `no coincide con el declarado (${declaredTax}€)`\n      );\n    }\n  }\n}\n\n// ============================================\n// 5. VALIDACIÓN DE RANGOS RAZONABLES\n// ============================================\n\n// Verificar que la tasa de IVA sea válida en España (0%, 4%, 10%, 21%)\nconst validTaxRates = [0, 4, 10, 21];\nif (data.tax_rate) {\n  const rate = parseFloat(data.tax_rate);\n  if (!isNaN(rate) && !validTaxRates.includes(rate)) {\n    validationErrors.push(\n      `La tasa de IVA ${rate}% no es estándar en España. ` +\n      `Tasas válidas: ${validTaxRates.join('%, ')}%`\n    );\n  }\n}\n\n// Verificar que el importe total no sea excesivamente alto (posible error de OCR)\nif (data.total_amount) {\n  const total = parseFloat(data.total_amount);\n  if (!isNaN(total) && total > 1000000) {\n    validationErrors.push(\n      `El importe total (${total.toFixed(2)}€) parece excesivamente alto. ` +\n      `Por favor, verifica que sea correcto.`\n    );\n  }\n}\n\n// ============================================\n// 6. DECISIÓN FINAL\n// ============================================\n\nif (validationErrors.length > 0) {\n  // HAY ERRORES - Preparar para reintento o fallo final\n  return {\n    json: {\n      validation_status: 'failed',\n      validation_errors: validationErrors,\n      retry_count: retryCount,\n      can_retry: retryCount < MAX_RETRIES,\n      original_data: data,\n      failed_at: new Date().toISOString()\n    }\n  };\n} else {\n  // VALIDACIÓN EXITOSA\n  return {\n    json: {\n      ...data,\n      validation_status: 'success',\n      validated_at: new Date().toISOString(),\n      retry_count: retryCount\n    }\n  };\n}"},"name":"Validate AI Response","type":"n8n-nodes-base.code","typeVersion":2,"position":[1600,3584],"id":"122512fe-6211-4c89-bed2-697529c0b6be"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"condition-1","leftValue":"={{ $json.validation_status }}","rightValue":"failed","operator":{"type":"string","operation":"equals"}},{"id":"condition-2","leftValue":"={{ $json.can_retry }}","rightValue":true,"operator":{"type":"boolean","operation":"true"}}],"combinator":"and"},"options":{}},"name":"Check Validation Status","type":"n8n-nodes-base.if","typeVersion":2,"position":[1824,3584],"id":"d23a3f90-6e47-4dbb-867d-82d2854bfead"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":1},"conditions":[{"id":"success-condition","leftValue":"={{ $json.validation_status }}","rightValue":"success","operator":{"type":"string","operation":"equals"}}],"combinator":"and"},"options":{}},"name":"Is Validation Success?","type":"n8n-nodes-base.if","typeVersion":2,"position":[2048,3776],"id":"cc55100f-bc4f-43a4-85d0-be227930b4d0"},{"parameters":{"respondWith":"json","responseBody":"=={{ {\n  \"success\": false,\n  \"message\": \"No se han podido extraer los datos automáticamente tras \" + ($json.retry_count + 1) + \" intentos. Por favor, introduce la información de esta factura manualmente.\",\n  \"errors\": $json.validation_errors,\n  \"retry_count\": $json.retry_count + 1,\n  \"suggestion\": \"Introduce los datos manualmente en el panel de Ingresos/Gastos.\",\n  \"timestamp\": $now.toISO()\n} }}","options":{"responseHeaders":{"entries":[{"name":"Content-Type","value":"application/json"}]}}},"name":"Respond Error","type":"n8n-nodes-base.respondToWebhook","typeVersion":1,"position":[2272,3936],"id":"45253e6a-37c1-4eae-8cef-55949e169235"},{"parameters":{"respondWith":"json","responseBody":"={\n  \"success\": true,\n  \"message\": \"Factura procesada y guardada correctamente\"\n}","options":{"responseHeaders":{"entries":[{"name":"Content-Type","value":"application/json"}]}}},"name":"Respond Success","type":"n8n-nodes-base.respondToWebhook","typeVersion":1,"position":[2944,3744],"id":"69ca6161-2662-4165-b960-a56028d255c5"},{"parameters":{"jsCode":"// Cogemos el objeto de la factura directamente desde la respuesta de OpenAI\nconst invoiceData = $input.all()[0].json.output[0].content[0].text;\n\n// Recuperamos el tipo (income/expense) que viene del envío inicial del frontend\nconst type = $('Webhook').first().json.body.type;\n\n// Recuperamos el retry_count que definió el nodo \"Build Retry Prompt\" en este ciclo\nlet retryCount = 0;\ntry {\n  retryCount = $('Build Prompt & Rate Limit').first().json.retry_count || 0;\n} catch (e) {\n  retryCount = 0;\n}\n\n// Inyectamos los metadatos necesarios para el nodo de validación\ninvoiceData.type = type;\ninvoiceData.retry_count = retryCount;\n\nreturn invoiceData;"},"type":"n8n-nodes-base.code","typeVersion":2,"position":[1376,3584],"id":"e499390e-2a55-4c29-be11-ce5ad08879a1","name":"Format OpenAI response"},{"parameters":{"jsCode":"// ===========================================\n// BUILD PROMPT + RATE LIMITER INTEGRADO\n// ===========================================\n\n// 📊 CONFIGURACIÓN DE LÍMITES DIARIOS\nconst LIMITS = {\n  \"gpt-4o-mini\": 100,\n  \"chatgpt-4o-latest\": 5\n};\n\n// 🔍 PARTE 1: DETECCIÓN DE CONTEXTO Y RATE LIMITING\nlet validationData = null;\nlet retryCount = 0;\n\ntry {\n  validationData = $(\"Check Validation Status\").first().json;\n  retryCount = (validationData.retry_count || 0) + 1;\n} catch (e) {\n  retryCount = 0;\n}\n\nconst targetModel = retryCount > 0 ? \"chatgpt-4o-latest\" : \"gpt-4o-mini\";\n\n// 💾 Gestión de Static Data para Rate Limiting\nconst staticData = $getWorkflowStaticData('global');\nconst today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD\n\n// 🔄 Reset automático a medianoche\nif (!staticData.lastResetDate || staticData.lastResetDate !== today) {\n  staticData.lastResetDate = today;\n  staticData.counts = {\n    \"gpt-4o-mini\": 0,\n    \"chatgpt-4o-latest\": 0\n  };\n}\n\n// ⚠️ VERIFICAR LÍMITE\nconst currentCount = staticData.counts[targetModel] || 0;\nconst maxLimit = LIMITS[targetModel];\n\nif (currentCount >= maxLimit) {\n  throw new Error(JSON.stringify({\n    type: \"RATE_LIMIT_EXCEEDED\",\n    model: targetModel,\n    current: currentCount,\n    limit: maxLimit,\n    message: `Límite diario alcanzado para ${targetModel}: ${currentCount}/${maxLimit} peticiones. Intenta mañana o introduce los datos manualmente.`\n  }));\n}\n\n// ✅ Incrementar contador\nstaticData.counts[targetModel] = currentCount + 1;\n\n// 📝 PARTE 2: CONSTRUCCIÓN DEL PROMPT\nconst errors = validationData?.validation_errors || [];\n\nlet prompt = `Eres un experto en contabilidad española. Analiza esta factura y extrae los datos en formato JSON.\n\n**REGLAS CRÍTICAS DE EXTRACCIÓN:**\n1. ⚠️ **IMPORTANTE:** Si no encuentras un dato, usa el valor null. **PROHIBIDO** usar textos como \"Not provided\", \"N/A\", \"Unknown\" o similares.\n2. INVOICE_NUMBER: Busca el número de factura. Diferéncialo de la fecha. Suele estar etiquetado como 'Factura nº', 'Nº Doc', etc.\n3. ISSUE_DATE: La fecha de emisión siempre en formato YYYY-MM-DD.\n4. TAX_RATE: Solo el número (0, 4, 10 o 21).\n5. CATEGORY: Solo si type=expense. Ej: Suministros, Alquiler, Gestoría, etc.\n\n**ESTRUCTURA JSON:**\n{\n  \"type\": \"income\" o \"expense\",\n  \"third_party\": {\n    \"name\": \"Nombre fiscal o null\",\n    \"nif\": \"NIF/CIF o null\",\n    \"address\": \"Dirección completa o null\"\n  },\n  \"invoice_number\": \"String o null\",\n  \"issue_date\": \"YYYY-MM-DD o null\",\n  \"base_amount\": número o null,\n  \"tax_rate\": número o null,\n  \"tax_amount\": número o null,\n  \"total_amount\": número o null,\n  \"category\": \"String o null\"\n}`;\n\n// 🔁 Si es un reintento, añadir instrucciones de corrección\nif (retryCount > 0) {\n  prompt = `⚠️ INSTRUCCIONES DE AUDITORÍA (RESURRECCIÓN DE DATOS):\nEl intento anterior falló. Ahora, como auditor senior, debes corregir estos errores detectados:\n\n${errors.map((err, i) => `${i + 1}. ❌ ${err}`).join('\\n')}\n\n**ANÁLISIS DE CORRECCIÓN:**\n- Especial atención: Si antes pusiste \"Not provided\", ahora busca mejor o pon null si realmente no existe.\n- ¿Se ha confundido la Fecha con el Número de Factura?\n- Re-calcula: Base imponible + IVA debe sumar exactamente el Total.\n- Identidad: El NIF debe ser el de la OTRA parte (cliente o proveedor).\n\n${prompt}`;\n}\n\n// 📤 SALIDA\nreturn {\n  json: {\n    enhanced_prompt: prompt,\n    retry_count: retryCount,\n    file_id: $(\"Upload a file\").first().json.id,\n    target_model: targetModel,\n    // 📊 Info de uso (para monitoreo)\n    _rate_limit_info: {\n      model: targetModel,\n      usage: staticData.counts[targetModel],\n      limit: maxLimit,\n      remaining: maxLimit - staticData.counts[targetModel],\n      date: today\n    }\n  }\n};\n"},"name":"Build Prompt & Rate Limit","type":"n8n-nodes-base.code","typeVersion":2,"position":[624,3584],"id":"220a13a7-b85c-4833-8a23-646df63d251d","retryOnFail":false,"onError":"continueRegularOutput"},{"parameters":{"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict","version":3},"conditions":[{"id":"6c129aeb-931f-41cc-9c9e-d139847f31a2","leftValue":"={{ $json.error }}","rightValue":"","operator":{"type":"string","operation":"notEmpty","singleValue":true}}],"combinator":"and"},"options":{}},"type":"n8n-nodes-base.if","typeVersion":2.3,"position":[784,3456],"id":"79da9155-e8a1-435c-a2be-db6370903413","name":"If"},{"parameters":{"respondWith":"json","responseBody":"{\n  \"success\": false,\n  \"message\": \"Has alcanzado el límite de procesamiento diario\",\n  \"detail\": \"Por favor, intenta de nuevo mañana o introduce los datos de la factura manualmente\",\n  \"error_type\": \"rate_limit_exceeded\",\n  \"limits\": {\n    \"gpt-4o-mini\": \"100 peticiones/día\",\n    \"gpt-4o-latest\": \"10 peticiones/día\"\n  },\n  \"retry_after\": \"Mañana a las 00:00\"\n}","options":{"responseCode":429,"responseHeaders":{"entries":[{"name":"Retry-After","value":"86400"}]}}},"type":"n8n-nodes-base.respondToWebhook","typeVersion":1.5,"position":[1008,3280],"id":"2b4f95fe-0ac7-4248-bfd8-a4f534213765","name":"Respond Rate Limit Error"}],"connections":{"Webhook":{"main":[[{"node":"Upload a file","type":"main","index":0}]]},"Upload a file":{"main":[[{"node":"Build Prompt & Rate Limit","type":"main","index":0}]]},"Message a model":{"main":[[{"node":"Format OpenAI response","type":"main","index":0}]]},"Upsert Client":{"main":[[{"node":"Postgres Invoices","type":"main","index":0}]]},"Switch":{"main":[[{"node":"Upsert Client","type":"main","index":0}],[{"node":"Upsert Provider","type":"main","index":0}]]},"Upsert Provider":{"main":[[{"node":"Postgres Received Invoices","type":"main","index":0}]]},"Validate AI Response":{"main":[[{"node":"Check Validation Status","type":"main","index":0}]]},"Check Validation Status":{"main":[[{"node":"Build Prompt & Rate Limit","type":"main","index":0}],[{"node":"Is Validation Success?","type":"main","index":0}]]},"Is Validation Success?":{"main":[[{"node":"Switch","type":"main","index":0}],[{"node":"Respond Error","type":"main","index":0}]]},"Postgres Received Invoices":{"main":[[{"node":"Respond Success","type":"main","index":0}]]},"Postgres Invoices":{"main":[[{"node":"Respond Success","type":"main","index":0}]]},"Format OpenAI response":{"main":[[{"node":"Validate AI Response","type":"main","index":0}]]},"Build Prompt & Rate Limit":{"main":[[{"node":"If","type":"main","index":0}]]},"If":{"main":[[{"node":"Respond Rate Limit Error","type":"main","index":0}],[{"node":"Message a model","type":"main","index":0}]]}},"authors":"Juan Carlos Sastre Iglesias","name":null,"description":null}}
+{
+  "updatedAt": "2025-12-22T17:38:30.012Z",
+  "createdAt": "2025-12-20T16:16:04.929Z",
+  "id": "5NuwkfihaBtnxSpm",
+  "name": "Factu - Upload PDF",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "83fa05c6-e044-4abc-89bd-e470ff08b7d1",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        160,
+        3712
+      ],
+      "id": "c3a44ecf-3530-4a6c-84ec-0bc7ee63e658",
+      "name": "Webhook",
+      "webhookId": "83fa05c6-e044-4abc-89bd-e470ff08b7d1"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "binaryPropertyName": "file",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        352,
+        3536
+      ],
+      "id": "1f81f246-1f6f-45f2-9ed0-6012e8f5ec1c",
+      "name": "Upload a file",
+      "credentials": {
+        "openAiApi": {
+          "id": "HEQLOqeHtzWHpu4h",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "={{ $json.target_model }}",
+          "mode": "id"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "file",
+              "fileType": "fileId",
+              "fileId": "={{ $json.file_id }}"
+            },
+            {
+              "content": "={{ $json.enhanced_prompt }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "textFormat": {
+            "textOptions": {
+              "type": "json_object"
+            }
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        1024,
+        3456
+      ],
+      "id": "e843c528-552f-4d28-b3f2-0179ed379ccc",
+      "name": "Message a model",
+      "credentials": {
+        "openAiApi": {
+          "id": "HEQLOqeHtzWHpu4h",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO issued_invoices (client_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, status) \nVALUES ($1, $2, $3, $4, $5, $6, $7, 'processed')\nON CONFLICT (invoice_number) \nDO UPDATE SET \n    total_amount = EXCLUDED.total_amount,\n    base_amount = EXCLUDED.base_amount,\n    tax_amount = EXCLUDED.tax_amount,\n    issue_date = EXCLUDED.issue_date,\n    status = 'processed';",
+        "options": {
+          "queryReplacement": "={{ $node[\"Upsert Client\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }}"
+        }
+      },
+      "id": "019a518e-4b1d-4cda-a620-d602d2bab570",
+      "name": "Postgres Invoices",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2720,
+        3648
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "KJPvXpEO7E9SQ6xv",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO clients (nif_cif, name, address) VALUES ($1, $2, $3) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3 RETURNING id;",
+        "options": {
+          "queryReplacement": "={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }}"
+        }
+      },
+      "id": "f46bf79f-621f-4f51-a191-45b5e262a711",
+      "name": "Upsert Client",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2496,
+        3648
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "KJPvXpEO7E9SQ6xv",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "income",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "4e1c4cf8-9b50-4246-8c41-9133b84b0759"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "90c33410-d1ce-4ca3-a959-3248c95dd850",
+                    "leftValue": "={{ $json.type }}",
+                    "rightValue": "expense",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        2272,
+        3744
+      ],
+      "id": "07702448-f205-4580-92bd-0c06952a1e1e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO providers (nif_cif, name, address, email) VALUES ($1, $2, $3, $4) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3, email = $4 RETURNING id;",
+        "options": {
+          "queryReplacement": "={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }},{{ $json.third_party.email }}"
+        }
+      },
+      "id": "cc738fa9-749c-40b3-be03-d33663d258a7",
+      "name": "Upsert Provider",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2496,
+        3840
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "KJPvXpEO7E9SQ6xv",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO received_invoices (provider_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'processed');",
+        "options": {
+          "queryReplacement": "={{ $node[\"Upsert Provider\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }}"
+        }
+      },
+      "id": "eae36a6c-46af-48f3-8d7a-e9e187fab702",
+      "name": "Postgres Received Invoices",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2720,
+        3840
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "KJPvXpEO7E9SQ6xv",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================\n// NODO DE VALIDACIÓN CON SISTEMA DE REINTENTOS\n// ============================================\n\nconst data = $input.first().json;\nconst MAX_RETRIES = 1; // Máximo 1 reintento (total 2 intentos)\nconst retryCount = data.retry_count || 0;\n\n// Array para acumular errores encontrados\nconst validationErrors = [];\n\n// ============================================\n// 1. VALIDACIÓN DE ESQUEMA (Campos requeridos)\n// ============================================\n\n// Verificar que existe el campo 'type'\nif (!data.type || !['income', 'expense'].includes(data.type)) {\n  validationErrors.push('El campo \"type\" debe ser \"income\" o \"expense\"');\n}\n\n// Verificar que existe third_party\nif (!data.third_party || typeof data.third_party !== 'object') {\n  validationErrors.push('Falta el objeto \"third_party\" con los datos del cliente/proveedor');\n} else {\n  // Validar campos dentro de third_party\n  const thirdPartyFields = ['name', 'nif', 'address'];\n  const missingThirdParty = thirdPartyFields.filter(field => {\n    const value = data.third_party[field];\n    return value === undefined || value === null || value === '';\n  });\n  \n  if (missingThirdParty.length > 0) {\n    validationErrors.push(`Campos faltantes en third_party: ${missingThirdParty.join(', ')}`);\n  }\n}\n\n// Validar campos de la factura (fuera de third_party)\nconst invoiceFields = ['invoice_number', 'issue_date', 'base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nconst missingInvoice = invoiceFields.filter(field => {\n  const value = data[field];\n  return value === undefined || value === null || value === '';\n});\n\nif (missingInvoice.length > 0) {\n  validationErrors.push(`Campos faltantes de factura: ${missingInvoice.join(', ')}`);\n}\n\n\n// ============================================\n// 2. VALIDACIÓN DE TIPOS DE DATOS\n// ============================================\n\n// Validar que los importes sean números válidos\nconst numericFields = ['base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nfor (const field of numericFields) {\n  if (data[field] !== undefined) {\n    const value = parseFloat(data[field]);\n    if (isNaN(value)) {\n      validationErrors.push(`El campo \"${field}\" debe ser un número (recibido: \"${data[field]}\")`);\n    } else if (value < 0) {\n      validationErrors.push(`El campo \"${field}\" no puede ser negativo`);\n    }\n  }\n}\n\n// ============================================\n// 3. VALIDACIÓN DE FORMATOS\n// ============================================\n\n// Validar formato de fecha (YYYY-MM-DD)\nif (data.issue_date) {\n  const dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\n  if (!dateRegex.test(data.issue_date)) {\n    validationErrors.push(`La fecha \"${data.issue_date}\" debe tener formato YYYY-MM-DD (ej: 2025-01-15)`);\n  } else {\n    // Verificar que sea una fecha válida\n    const date = new Date(data.issue_date);\n    if (isNaN(date.getTime())) {\n      validationErrors.push(`La fecha \"${data.issue_date}\" no es válida`);\n    }\n  }\n}\n\n// Validar formato de NIF/CIF español (letra + 8 dígitos)\nif (data.third_party && data.third_party.nif) {\n  const nifRegex = /^[A-Z0-9]{5,20}$/;\n  if (!nifRegex.test(data.third_party.nif)) {\n    validationErrors.push(`El NIF/CIF \"${data.third_party.nif}\" debe tener entre 5 y 20 caracteres alfanuméricos`);\n  }\n}\n\n// ============================================\n// 4. VALIDACIÓN DE COHERENCIA MATEMÁTICA\n// ============================================\n\nif (data.base_amount && data.tax_amount && data.total_amount) {\n  const base = parseFloat(data.base_amount);\n  const tax = parseFloat(data.tax_amount);\n  const total = parseFloat(data.total_amount);\n  \n  if (!isNaN(base) && !isNaN(tax) && !isNaN(total)) {\n    // Verificar que base + IVA = total (con tolerancia de 2 céntimos)\n    const calculatedTotal = base + tax;\n    const difference = Math.abs(calculatedTotal - total);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `Incoherencia matemática: base (${base.toFixed(2)}) + IVA (${tax.toFixed(2)}) = ${calculatedTotal.toFixed(2)}, ` +\n        `pero el total declarado es ${total.toFixed(2)} (diferencia: ${difference.toFixed(2)}€)`\n      );\n    }\n  }\n}\n\n// Validar que el IVA calculado coincide con la tasa\nif (data.base_amount && data.tax_rate && data.tax_amount) {\n  const base = parseFloat(data.base_amount);\n  const rate = parseFloat(data.tax_rate);\n  const declaredTax = parseFloat(data.tax_amount);\n  \n  if (!isNaN(base) && !isNaN(rate) && !isNaN(declaredTax)) {\n    const calculatedTax = base * (rate / 100);\n    const difference = Math.abs(calculatedTax - declaredTax);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `El IVA calculado (${calculatedTax.toFixed(2)}€ = ${base}€ × ${rate}%) ` +\n        `no coincide con el declarado (${declaredTax}€)`\n      );\n    }\n  }\n}\n\n// ============================================\n// 5. VALIDACIÓN DE RANGOS RAZONABLES\n// ============================================\n\n// Verificar que la tasa de IVA sea válida en España (0%, 4%, 10%, 21%)\nconst validTaxRates = [0, 4, 10, 21];\nif (data.tax_rate) {\n  const rate = parseFloat(data.tax_rate);\n  if (!isNaN(rate) && !validTaxRates.includes(rate)) {\n    validationErrors.push(\n      `La tasa de IVA ${rate}% no es estándar en España. ` +\n      `Tasas válidas: ${validTaxRates.join('%, ')}%`\n    );\n  }\n}\n\n// Verificar que el importe total no sea excesivamente alto (posible error de OCR)\nif (data.total_amount) {\n  const total = parseFloat(data.total_amount);\n  if (!isNaN(total) && total > 1000000) {\n    validationErrors.push(\n      `El importe total (${total.toFixed(2)}€) parece excesivamente alto. ` +\n      `Por favor, verifica que sea correcto.`\n    );\n  }\n}\n\n// ============================================\n// 6. DECISIÓN FINAL\n// ============================================\n\nif (validationErrors.length > 0) {\n  // HAY ERRORES - Preparar para reintento o fallo final\n  return {\n    json: {\n      validation_status: 'failed',\n      validation_errors: validationErrors,\n      retry_count: retryCount,\n      can_retry: retryCount < MAX_RETRIES,\n      original_data: data,\n      failed_at: new Date().toISOString()\n    }\n  };\n} else {\n  // VALIDACIÓN EXITOSA\n  return {\n    json: {\n      ...data,\n      validation_status: 'success',\n      validated_at: new Date().toISOString(),\n      retry_count: retryCount\n    }\n  };\n}"
+      },
+      "name": "Validate AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        3584
+      ],
+      "id": "122512fe-6211-4c89-bed2-697529c0b6be"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "condition-1",
+              "leftValue": "={{ $json.validation_status }}",
+              "rightValue": "failed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "condition-2",
+              "leftValue": "={{ $json.can_retry }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Check Validation Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1824,
+        3584
+      ],
+      "id": "d23a3f90-6e47-4dbb-867d-82d2854bfead"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "success-condition",
+              "leftValue": "={{ $json.validation_status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Is Validation Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2048,
+        3776
+      ],
+      "id": "cc55100f-bc4f-43a4-85d0-be227930b4d0"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "=={{ {\n  \"success\": false,\n  \"message\": \"No se han podido extraer los datos automáticamente tras \" + ($json.retry_count + 1) + \" intentos. Por favor, introduce la información de esta factura manualmente.\",\n  \"errors\": $json.validation_errors,\n  \"retry_count\": $json.retry_count + 1,\n  \"suggestion\": \"Introduce los datos manualmente en el panel de Ingresos/Gastos.\",\n  \"timestamp\": $now.toISO()\n} }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2272,
+        3936
+      ],
+      "id": "45253e6a-37c1-4eae-8cef-55949e169235"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": true,\n  \"message\": \"Factura procesada y guardada correctamente\"\n}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      },
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2944,
+        3744
+      ],
+      "id": "69ca6161-2662-4165-b960-a56028d255c5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Cogemos el objeto de la factura directamente desde la respuesta de OpenAI\nconst invoiceData = $input.all()[0].json.output[0].content[0].text;\n\n// Recuperamos el tipo (income/expense) que viene del envío inicial del frontend\nconst type = $('Webhook').first().json.body.type;\n\n// Recuperamos el retry_count que definió el nodo \"Build Retry Prompt\" en este ciclo\nlet retryCount = 0;\ntry {\n  retryCount = $('Build Prompt & Rate Limit').first().json.retry_count || 0;\n} catch (e) {\n  retryCount = 0;\n}\n\n// Inyectamos los metadatos necesarios para el nodo de validación\ninvoiceData.type = type;\ninvoiceData.retry_count = retryCount;\n\nreturn invoiceData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        3584
+      ],
+      "id": "e499390e-2a55-4c29-be11-ce5ad08879a1",
+      "name": "Format OpenAI response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ===========================================\n// BUILD PROMPT + RATE LIMITER INTEGRADO\n// ===========================================\n\n// 📊 CONFIGURACIÓN DE LÍMITES DIARIOS\nconst LIMITS = {\n  \"gpt-4o-mini\": 100,\n  \"chatgpt-4o-latest\": 5\n};\n\n// 🔍 PARTE 1: DETECCIÓN DE CONTEXTO Y RATE LIMITING\nlet validationData = null;\nlet retryCount = 0;\n\ntry {\n  validationData = $(\"Check Validation Status\").first().json;\n  retryCount = (validationData.retry_count || 0) + 1;\n} catch (e) {\n  retryCount = 0;\n}\n\nconst targetModel = retryCount > 0 ? \"chatgpt-4o-latest\" : \"gpt-4o-mini\";\n\n// 💾 Gestión de Static Data para Rate Limiting\nconst staticData = $getWorkflowStaticData('global');\nconst today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD\n\n// 🔄 Reset automático a medianoche\nif (!staticData.lastResetDate || staticData.lastResetDate !== today) {\n  staticData.lastResetDate = today;\n  staticData.counts = {\n    \"gpt-4o-mini\": 0,\n    \"chatgpt-4o-latest\": 0\n  };\n}\n\n// ⚠️ VERIFICAR LÍMITE\nconst currentCount = staticData.counts[targetModel] || 0;\nconst maxLimit = LIMITS[targetModel];\n\nif (currentCount >= maxLimit) {\n  throw new Error(JSON.stringify({\n    type: \"RATE_LIMIT_EXCEEDED\",\n    model: targetModel,\n    current: currentCount,\n    limit: maxLimit,\n    message: `Límite diario alcanzado para ${targetModel}: ${currentCount}/${maxLimit} peticiones. Intenta mañana o introduce los datos manualmente.`\n  }));\n}\n\n// ✅ Incrementar contador\nstaticData.counts[targetModel] = currentCount + 1;\n\n// 📝 PARTE 2: CONSTRUCCIÓN DEL PROMPT\nconst errors = validationData?.validation_errors || [];\n\nlet prompt = `Eres un experto en contabilidad española. Analiza esta factura y extrae los datos en formato JSON.\n\n**REGLAS CRÍTICAS DE EXTRACCIÓN:**\n1. ⚠️ **IMPORTANTE:** Si no encuentras un dato, usa el valor null. **PROHIBIDO** usar textos como \"Not provided\", \"N/A\", \"Unknown\" o similares.\n2. INVOICE_NUMBER: Busca el número de factura. Diferéncialo de la fecha. Suele estar etiquetado como 'Factura nº', 'Nº Doc', etc.\n3. ISSUE_DATE: La fecha de emisión siempre en formato YYYY-MM-DD.\n4. TAX_RATE: Solo el número (0, 4, 10 o 21).\n\n**ESTRUCTURA JSON:**\n{\n  \"type\": \"income\" o \"expense\",\n  \"third_party\": {\n    \"name\": \"Nombre fiscal o null\",\n    \"nif\": \"NIF/CIF o null\",\n    \"address\": \"Dirección completa o null\"\n  },\n  \"invoice_number\": \"String o null\",\n  \"issue_date\": \"YYYY-MM-DD o null\",\n  \"base_amount\": número o null,\n  \"tax_rate\": número o null,\n  \"tax_amount\": número o null,\n  \"total_amount\": número o null\n}`;\n\n// 🔁 Si es un reintento, añadir instrucciones de corrección\nif (retryCount > 0) {\n  prompt = `⚠️ INSTRUCCIONES DE AUDITORÍA (RESURRECCIÓN DE DATOS):\nEl intento anterior falló. Ahora, como auditor senior, debes corregir estos errores detectados:\n\n${errors.map((err, i) => `${i + 1}. ❌ ${err}`).join('\\n')}\n\n**ANÁLISIS DE CORRECCIÓN:**\n- Especial atención: Si antes pusiste \"Not provided\", ahora busca mejor o pon null si realmente no existe.\n- ¿Se ha confundido la Fecha con el Número de Factura?\n- Re-calcula: Base imponible + IVA debe sumar exactamente el Total.\n- Identidad: El NIF debe ser el de la OTRA parte (cliente o proveedor).\n\n${prompt}`;\n}\n\n// 📤 SALIDA\nreturn {\n  json: {\n    enhanced_prompt: prompt,\n    retry_count: retryCount,\n    file_id: $(\"Upload a file\").first().json.id,\n    target_model: targetModel,\n    // 📊 Info de uso (para monitoreo)\n    _rate_limit_info: {\n      model: targetModel,\n      usage: staticData.counts[targetModel],\n      limit: maxLimit,\n      remaining: maxLimit - staticData.counts[targetModel],\n      date: today\n    }\n  }\n};\n"
+      },
+      "name": "Build Prompt & Rate Limit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        3584
+      ],
+      "id": "220a13a7-b85c-4833-8a23-646df63d251d",
+      "retryOnFail": false,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6c129aeb-931f-41cc-9c9e-d139847f31a2",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        784,
+        3456
+      ],
+      "id": "79da9155-e8a1-435c-a2be-db6370903413",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"success\": false,\n  \"message\": \"Has alcanzado el límite de procesamiento diario\",\n  \"detail\": \"Por favor, intenta de nuevo mañana o introduce los datos de la factura manualmente\",\n  \"error_type\": \"rate_limit_exceeded\",\n  \"limits\": {\n    \"gpt-4o-mini\": \"100 peticiones/día\",\n    \"gpt-4o-latest\": \"10 peticiones/día\"\n  },\n  \"retry_after\": \"Mañana a las 00:00\"\n}",
+        "options": {
+          "responseCode": 429,
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Retry-After",
+                "value": "86400"
+              }
+            ]
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1008,
+        3280
+      ],
+      "id": "2b4f95fe-0ac7-4248-bfd8-a4f534213765",
+      "name": "Respond Rate Limit Error"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Upload a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload a file": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt & Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Format OpenAI response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Client": {
+      "main": [
+        [
+          {
+            "node": "Postgres Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Upsert Client",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Upsert Provider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Provider": {
+      "main": [
+        [
+          {
+            "node": "Postgres Received Invoices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate AI Response": {
+      "main": [
+        [
+          {
+            "node": "Check Validation Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Validation Status": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt & Rate Limit",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Validation Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Validation Success?": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Received Invoices": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Invoices": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format OpenAI response": {
+      "main": [
+        [
+          {
+            "node": "Validate AI Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt & Rate Limit": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Respond Rate Limit Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "staticData": {
+    "global": {
+      "lastResetDate": "2025-12-22",
+      "counts": {
+        "gpt-4o-mini": 6,
+        "chatgpt-4o-latest": 5
+      }
+    }
+  },
+  "meta": null,
+  "pinData": {},
+  "versionId": "6f3383ff-82b5-4bf3-875d-f17bb87bdde1",
+  "activeVersionId": "6f3383ff-82b5-4bf3-875d-f17bb87bdde1",
+  "versionCounter": 116,
+  "triggerCount": 1,
+  "shared": [
+    {
+      "updatedAt": "2025-12-20T16:16:04.937Z",
+      "createdAt": "2025-12-20T16:16:04.937Z",
+      "role": "workflow:owner",
+      "workflowId": "5NuwkfihaBtnxSpm",
+      "projectId": "PChSnDXpHbIycoV4",
+      "project": {
+        "updatedAt": "2025-12-09T15:11:24.630Z",
+        "createdAt": "2025-12-09T15:10:50.445Z",
+        "id": "PChSnDXpHbIycoV4",
+        "name": "Juan Carlos Sastre Iglesias <juan.carlos.sastre.iglesias@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "projectRelations": [
+          {
+            "updatedAt": "2025-12-09T15:10:50.445Z",
+            "createdAt": "2025-12-09T15:10:50.445Z",
+            "userId": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
+            "projectId": "PChSnDXpHbIycoV4",
+            "user": {
+              "updatedAt": "2025-12-22T08:15:45.000Z",
+              "createdAt": "2025-12-09T15:10:49.925Z",
+              "id": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
+              "email": "juan.carlos.sastre.iglesias@gmail.com",
+              "firstName": "Juan Carlos",
+              "lastName": "Sastre Iglesias",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-12-09T15:11:52.855Z",
+                "personalization_survey_n8n_version": "1.103.2",
+                "automationGoalDevops": [
+                  "other"
+                ],
+                "companyType": "education",
+                "role": "it"
+              },
+              "settings": {
+                "userActivated": true,
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "3fcTfRcTJhwtug2U",
+                "userActivatedAt": 1765715364784,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1765983214665
+                }
+              },
+              "disabled": false,
+              "mfaEnabled": false,
+              "lastActiveAt": "2025-12-22",
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2025-12-22T17:38:30.014Z",
+    "createdAt": "2025-12-22T17:38:30.014Z",
+    "versionId": "6f3383ff-82b5-4bf3-875d-f17bb87bdde1",
+    "workflowId": "5NuwkfihaBtnxSpm",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "83fa05c6-e044-4abc-89bd-e470ff08b7d1",
+          "responseMode": "responseNode",
+          "options": {
+            "allowedOrigins": "*"
+          }
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          160,
+          3712
+        ],
+        "id": "c3a44ecf-3530-4a6c-84ec-0bc7ee63e658",
+        "name": "Webhook",
+        "webhookId": "83fa05c6-e044-4abc-89bd-e470ff08b7d1"
+      },
+      {
+        "parameters": {
+          "resource": "file",
+          "binaryPropertyName": "file",
+          "options": {}
+        },
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 2.1,
+        "position": [
+          352,
+          3536
+        ],
+        "id": "1f81f246-1f6f-45f2-9ed0-6012e8f5ec1c",
+        "name": "Upload a file",
+        "credentials": {
+          "openAiApi": {
+            "id": "HEQLOqeHtzWHpu4h",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "modelId": {
+            "__rl": true,
+            "value": "={{ $json.target_model }}",
+            "mode": "id"
+          },
+          "responses": {
+            "values": [
+              {
+                "type": "file",
+                "fileType": "fileId",
+                "fileId": "={{ $json.file_id }}"
+              },
+              {
+                "content": "={{ $json.enhanced_prompt }}"
+              }
+            ]
+          },
+          "builtInTools": {},
+          "options": {
+            "textFormat": {
+              "textOptions": {
+                "type": "json_object"
+              }
+            }
+          }
+        },
+        "type": "@n8n/n8n-nodes-langchain.openAi",
+        "typeVersion": 2.1,
+        "position": [
+          1024,
+          3456
+        ],
+        "id": "e843c528-552f-4d28-b3f2-0179ed379ccc",
+        "name": "Message a model",
+        "credentials": {
+          "openAiApi": {
+            "id": "HEQLOqeHtzWHpu4h",
+            "name": "OpenAi account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO issued_invoices (client_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, status) \nVALUES ($1, $2, $3, $4, $5, $6, $7, 'processed')\nON CONFLICT (invoice_number) \nDO UPDATE SET \n    total_amount = EXCLUDED.total_amount,\n    base_amount = EXCLUDED.base_amount,\n    tax_amount = EXCLUDED.tax_amount,\n    issue_date = EXCLUDED.issue_date,\n    status = 'processed';",
+          "options": {
+            "queryReplacement": "={{ $node[\"Upsert Client\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }}"
+          }
+        },
+        "id": "019a518e-4b1d-4cda-a620-d602d2bab570",
+        "name": "Postgres Invoices",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2720,
+          3648
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "KJPvXpEO7E9SQ6xv",
+            "name": "Postgres account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO clients (nif_cif, name, address) VALUES ($1, $2, $3) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3 RETURNING id;",
+          "options": {
+            "queryReplacement": "={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }}"
+          }
+        },
+        "id": "f46bf79f-621f-4f51-a191-45b5e262a711",
+        "name": "Upsert Client",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2496,
+          3648
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "KJPvXpEO7E9SQ6xv",
+            "name": "Postgres account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "income",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      },
+                      "id": "4e1c4cf8-9b50-4246-8c41-9133b84b0759"
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "90c33410-d1ce-4ca3-a959-3248c95dd850",
+                      "leftValue": "={{ $json.type }}",
+                      "rightValue": "expense",
+                      "operator": {
+                        "type": "string",
+                        "operation": "equals"
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          2272,
+          3744
+        ],
+        "id": "07702448-f205-4580-92bd-0c06952a1e1e",
+        "name": "Switch"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO providers (nif_cif, name, address, email) VALUES ($1, $2, $3, $4) ON CONFLICT (nif_cif) DO UPDATE SET name = $2, address = $3, email = $4 RETURNING id;",
+          "options": {
+            "queryReplacement": "={{ $json.third_party.nif }},{{ $json.third_party.name }},{{ $json.third_party.address }},{{ $json.third_party.email }}"
+          }
+        },
+        "id": "cc738fa9-749c-40b3-be03-d33663d258a7",
+        "name": "Upsert Provider",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2496,
+          3840
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "KJPvXpEO7E9SQ6xv",
+            "name": "Postgres account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO received_invoices (provider_id, invoice_number, issue_date, base_amount, tax_rate, tax_amount, total_amount, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'processed');",
+          "options": {
+            "queryReplacement": "={{ $node[\"Upsert Provider\"].json.id }},{{ $('Format OpenAI response').item.json.invoice_number }},{{ $('Format OpenAI response').item.json.issue_date }},{{ $('Format OpenAI response').item.json.base_amount }},{{ $('Format OpenAI response').item.json.tax_rate }},{{ $('Format OpenAI response').item.json.tax_amount }},{{ $('Format OpenAI response').item.json.total_amount }}"
+          }
+        },
+        "id": "eae36a6c-46af-48f3-8d7a-e9e187fab702",
+        "name": "Postgres Received Invoices",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.4,
+        "position": [
+          2720,
+          3840
+        ],
+        "credentials": {
+          "postgres": {
+            "id": "KJPvXpEO7E9SQ6xv",
+            "name": "Postgres account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// ============================================\n// NODO DE VALIDACIÓN CON SISTEMA DE REINTENTOS\n// ============================================\n\nconst data = $input.first().json;\nconst MAX_RETRIES = 1; // Máximo 1 reintento (total 2 intentos)\nconst retryCount = data.retry_count || 0;\n\n// Array para acumular errores encontrados\nconst validationErrors = [];\n\n// ============================================\n// 1. VALIDACIÓN DE ESQUEMA (Campos requeridos)\n// ============================================\n\n// Verificar que existe el campo 'type'\nif (!data.type || !['income', 'expense'].includes(data.type)) {\n  validationErrors.push('El campo \"type\" debe ser \"income\" o \"expense\"');\n}\n\n// Verificar que existe third_party\nif (!data.third_party || typeof data.third_party !== 'object') {\n  validationErrors.push('Falta el objeto \"third_party\" con los datos del cliente/proveedor');\n} else {\n  // Validar campos dentro de third_party\n  const thirdPartyFields = ['name', 'nif', 'address'];\n  const missingThirdParty = thirdPartyFields.filter(field => {\n    const value = data.third_party[field];\n    return value === undefined || value === null || value === '';\n  });\n  \n  if (missingThirdParty.length > 0) {\n    validationErrors.push(`Campos faltantes en third_party: ${missingThirdParty.join(', ')}`);\n  }\n}\n\n// Validar campos de la factura (fuera de third_party)\nconst invoiceFields = ['invoice_number', 'issue_date', 'base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nconst missingInvoice = invoiceFields.filter(field => {\n  const value = data[field];\n  return value === undefined || value === null || value === '';\n});\n\nif (missingInvoice.length > 0) {\n  validationErrors.push(`Campos faltantes de factura: ${missingInvoice.join(', ')}`);\n}\n\n\n// ============================================\n// 2. VALIDACIÓN DE TIPOS DE DATOS\n// ============================================\n\n// Validar que los importes sean números válidos\nconst numericFields = ['base_amount', 'tax_rate', 'tax_amount', 'total_amount'];\nfor (const field of numericFields) {\n  if (data[field] !== undefined) {\n    const value = parseFloat(data[field]);\n    if (isNaN(value)) {\n      validationErrors.push(`El campo \"${field}\" debe ser un número (recibido: \"${data[field]}\")`);\n    } else if (value < 0) {\n      validationErrors.push(`El campo \"${field}\" no puede ser negativo`);\n    }\n  }\n}\n\n// ============================================\n// 3. VALIDACIÓN DE FORMATOS\n// ============================================\n\n// Validar formato de fecha (YYYY-MM-DD)\nif (data.issue_date) {\n  const dateRegex = /^\\d{4}-\\d{2}-\\d{2}$/;\n  if (!dateRegex.test(data.issue_date)) {\n    validationErrors.push(`La fecha \"${data.issue_date}\" debe tener formato YYYY-MM-DD (ej: 2025-01-15)`);\n  } else {\n    // Verificar que sea una fecha válida\n    const date = new Date(data.issue_date);\n    if (isNaN(date.getTime())) {\n      validationErrors.push(`La fecha \"${data.issue_date}\" no es válida`);\n    }\n  }\n}\n\n// Validar formato de NIF/CIF español (letra + 8 dígitos)\nif (data.third_party && data.third_party.nif) {\n  const nifRegex = /^[A-Z0-9]{5,20}$/;\n  if (!nifRegex.test(data.third_party.nif)) {\n    validationErrors.push(`El NIF/CIF \"${data.third_party.nif}\" debe tener entre 5 y 20 caracteres alfanuméricos`);\n  }\n}\n\n// ============================================\n// 4. VALIDACIÓN DE COHERENCIA MATEMÁTICA\n// ============================================\n\nif (data.base_amount && data.tax_amount && data.total_amount) {\n  const base = parseFloat(data.base_amount);\n  const tax = parseFloat(data.tax_amount);\n  const total = parseFloat(data.total_amount);\n  \n  if (!isNaN(base) && !isNaN(tax) && !isNaN(total)) {\n    // Verificar que base + IVA = total (con tolerancia de 2 céntimos)\n    const calculatedTotal = base + tax;\n    const difference = Math.abs(calculatedTotal - total);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `Incoherencia matemática: base (${base.toFixed(2)}) + IVA (${tax.toFixed(2)}) = ${calculatedTotal.toFixed(2)}, ` +\n        `pero el total declarado es ${total.toFixed(2)} (diferencia: ${difference.toFixed(2)}€)`\n      );\n    }\n  }\n}\n\n// Validar que el IVA calculado coincide con la tasa\nif (data.base_amount && data.tax_rate && data.tax_amount) {\n  const base = parseFloat(data.base_amount);\n  const rate = parseFloat(data.tax_rate);\n  const declaredTax = parseFloat(data.tax_amount);\n  \n  if (!isNaN(base) && !isNaN(rate) && !isNaN(declaredTax)) {\n    const calculatedTax = base * (rate / 100);\n    const difference = Math.abs(calculatedTax - declaredTax);\n    \n    if (difference > 0.02) {\n      validationErrors.push(\n        `El IVA calculado (${calculatedTax.toFixed(2)}€ = ${base}€ × ${rate}%) ` +\n        `no coincide con el declarado (${declaredTax}€)`\n      );\n    }\n  }\n}\n\n// ============================================\n// 5. VALIDACIÓN DE RANGOS RAZONABLES\n// ============================================\n\n// Verificar que la tasa de IVA sea válida en España (0%, 4%, 10%, 21%)\nconst validTaxRates = [0, 4, 10, 21];\nif (data.tax_rate) {\n  const rate = parseFloat(data.tax_rate);\n  if (!isNaN(rate) && !validTaxRates.includes(rate)) {\n    validationErrors.push(\n      `La tasa de IVA ${rate}% no es estándar en España. ` +\n      `Tasas válidas: ${validTaxRates.join('%, ')}%`\n    );\n  }\n}\n\n// Verificar que el importe total no sea excesivamente alto (posible error de OCR)\nif (data.total_amount) {\n  const total = parseFloat(data.total_amount);\n  if (!isNaN(total) && total > 1000000) {\n    validationErrors.push(\n      `El importe total (${total.toFixed(2)}€) parece excesivamente alto. ` +\n      `Por favor, verifica que sea correcto.`\n    );\n  }\n}\n\n// ============================================\n// 6. DECISIÓN FINAL\n// ============================================\n\nif (validationErrors.length > 0) {\n  // HAY ERRORES - Preparar para reintento o fallo final\n  return {\n    json: {\n      validation_status: 'failed',\n      validation_errors: validationErrors,\n      retry_count: retryCount,\n      can_retry: retryCount < MAX_RETRIES,\n      original_data: data,\n      failed_at: new Date().toISOString()\n    }\n  };\n} else {\n  // VALIDACIÓN EXITOSA\n  return {\n    json: {\n      ...data,\n      validation_status: 'success',\n      validated_at: new Date().toISOString(),\n      retry_count: retryCount\n    }\n  };\n}"
+        },
+        "name": "Validate AI Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1600,
+          3584
+        ],
+        "id": "122512fe-6211-4c89-bed2-697529c0b6be"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "condition-1",
+                "leftValue": "={{ $json.validation_status }}",
+                "rightValue": "failed",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              },
+              {
+                "id": "condition-2",
+                "leftValue": "={{ $json.can_retry }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Check Validation Status",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          1824,
+          3584
+        ],
+        "id": "d23a3f90-6e47-4dbb-867d-82d2854bfead"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 1
+            },
+            "conditions": [
+              {
+                "id": "success-condition",
+                "leftValue": "={{ $json.validation_status }}",
+                "rightValue": "success",
+                "operator": {
+                  "type": "string",
+                  "operation": "equals"
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "Is Validation Success?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [
+          2048,
+          3776
+        ],
+        "id": "cc55100f-bc4f-43a4-85d0-be227930b4d0"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "=={{ {\n  \"success\": false,\n  \"message\": \"No se han podido extraer los datos automáticamente tras \" + ($json.retry_count + 1) + \" intentos. Por favor, introduce la información de esta factura manualmente.\",\n  \"errors\": $json.validation_errors,\n  \"retry_count\": $json.retry_count + 1,\n  \"suggestion\": \"Introduce los datos manualmente en el panel de Ingresos/Gastos.\",\n  \"timestamp\": $now.toISO()\n} }}",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          }
+        },
+        "name": "Respond Error",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          2272,
+          3936
+        ],
+        "id": "45253e6a-37c1-4eae-8cef-55949e169235"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={\n  \"success\": true,\n  \"message\": \"Factura procesada y guardada correctamente\"\n}",
+          "options": {
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "application/json"
+                }
+              ]
+            }
+          }
+        },
+        "name": "Respond Success",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1,
+        "position": [
+          2944,
+          3744
+        ],
+        "id": "69ca6161-2662-4165-b960-a56028d255c5"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Cogemos el objeto de la factura directamente desde la respuesta de OpenAI\nconst invoiceData = $input.all()[0].json.output[0].content[0].text;\n\n// Recuperamos el tipo (income/expense) que viene del envío inicial del frontend\nconst type = $('Webhook').first().json.body.type;\n\n// Recuperamos el retry_count que definió el nodo \"Build Retry Prompt\" en este ciclo\nlet retryCount = 0;\ntry {\n  retryCount = $('Build Prompt & Rate Limit').first().json.retry_count || 0;\n} catch (e) {\n  retryCount = 0;\n}\n\n// Inyectamos los metadatos necesarios para el nodo de validación\ninvoiceData.type = type;\ninvoiceData.retry_count = retryCount;\n\nreturn invoiceData;"
+        },
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1376,
+          3584
+        ],
+        "id": "e499390e-2a55-4c29-be11-ce5ad08879a1",
+        "name": "Format OpenAI response"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ===========================================\n// BUILD PROMPT + RATE LIMITER INTEGRADO\n// ===========================================\n\n// 📊 CONFIGURACIÓN DE LÍMITES DIARIOS\nconst LIMITS = {\n  \"gpt-4o-mini\": 100,\n  \"chatgpt-4o-latest\": 5\n};\n\n// 🔍 PARTE 1: DETECCIÓN DE CONTEXTO Y RATE LIMITING\nlet validationData = null;\nlet retryCount = 0;\n\ntry {\n  validationData = $(\"Check Validation Status\").first().json;\n  retryCount = (validationData.retry_count || 0) + 1;\n} catch (e) {\n  retryCount = 0;\n}\n\nconst targetModel = retryCount > 0 ? \"chatgpt-4o-latest\" : \"gpt-4o-mini\";\n\n// 💾 Gestión de Static Data para Rate Limiting\nconst staticData = $getWorkflowStaticData('global');\nconst today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD\n\n// 🔄 Reset automático a medianoche\nif (!staticData.lastResetDate || staticData.lastResetDate !== today) {\n  staticData.lastResetDate = today;\n  staticData.counts = {\n    \"gpt-4o-mini\": 0,\n    \"chatgpt-4o-latest\": 0\n  };\n}\n\n// ⚠️ VERIFICAR LÍMITE\nconst currentCount = staticData.counts[targetModel] || 0;\nconst maxLimit = LIMITS[targetModel];\n\nif (currentCount >= maxLimit) {\n  throw new Error(JSON.stringify({\n    type: \"RATE_LIMIT_EXCEEDED\",\n    model: targetModel,\n    current: currentCount,\n    limit: maxLimit,\n    message: `Límite diario alcanzado para ${targetModel}: ${currentCount}/${maxLimit} peticiones. Intenta mañana o introduce los datos manualmente.`\n  }));\n}\n\n// ✅ Incrementar contador\nstaticData.counts[targetModel] = currentCount + 1;\n\n// 📝 PARTE 2: CONSTRUCCIÓN DEL PROMPT\nconst errors = validationData?.validation_errors || [];\n\nlet prompt = `Eres un experto en contabilidad española. Analiza esta factura y extrae los datos en formato JSON.\n\n**REGLAS CRÍTICAS DE EXTRACCIÓN:**\n1. ⚠️ **IMPORTANTE:** Si no encuentras un dato, usa el valor null. **PROHIBIDO** usar textos como \"Not provided\", \"N/A\", \"Unknown\" o similares.\n2. INVOICE_NUMBER: Busca el número de factura. Diferéncialo de la fecha. Suele estar etiquetado como 'Factura nº', 'Nº Doc', etc.\n3. ISSUE_DATE: La fecha de emisión siempre en formato YYYY-MM-DD.\n4. TAX_RATE: Solo el número (0, 4, 10 o 21).\n\n**ESTRUCTURA JSON:**\n{\n  \"type\": \"income\" o \"expense\",\n  \"third_party\": {\n    \"name\": \"Nombre fiscal o null\",\n    \"nif\": \"NIF/CIF o null\",\n    \"address\": \"Dirección completa o null\"\n  },\n  \"invoice_number\": \"String o null\",\n  \"issue_date\": \"YYYY-MM-DD o null\",\n  \"base_amount\": número o null,\n  \"tax_rate\": número o null,\n  \"tax_amount\": número o null,\n  \"total_amount\": número o null\n}`;\n\n// 🔁 Si es un reintento, añadir instrucciones de corrección\nif (retryCount > 0) {\n  prompt = `⚠️ INSTRUCCIONES DE AUDITORÍA (RESURRECCIÓN DE DATOS):\nEl intento anterior falló. Ahora, como auditor senior, debes corregir estos errores detectados:\n\n${errors.map((err, i) => `${i + 1}. ❌ ${err}`).join('\\n')}\n\n**ANÁLISIS DE CORRECCIÓN:**\n- Especial atención: Si antes pusiste \"Not provided\", ahora busca mejor o pon null si realmente no existe.\n- ¿Se ha confundido la Fecha con el Número de Factura?\n- Re-calcula: Base imponible + IVA debe sumar exactamente el Total.\n- Identidad: El NIF debe ser el de la OTRA parte (cliente o proveedor).\n\n${prompt}`;\n}\n\n// 📤 SALIDA\nreturn {\n  json: {\n    enhanced_prompt: prompt,\n    retry_count: retryCount,\n    file_id: $(\"Upload a file\").first().json.id,\n    target_model: targetModel,\n    // 📊 Info de uso (para monitoreo)\n    _rate_limit_info: {\n      model: targetModel,\n      usage: staticData.counts[targetModel],\n      limit: maxLimit,\n      remaining: maxLimit - staticData.counts[targetModel],\n      date: today\n    }\n  }\n};\n"
+        },
+        "name": "Build Prompt & Rate Limit",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          624,
+          3584
+        ],
+        "id": "220a13a7-b85c-4833-8a23-646df63d251d",
+        "retryOnFail": false,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "6c129aeb-931f-41cc-9c9e-d139847f31a2",
+                "leftValue": "={{ $json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "string",
+                  "operation": "notEmpty",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          784,
+          3456
+        ],
+        "id": "79da9155-e8a1-435c-a2be-db6370903413",
+        "name": "If"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "{\n  \"success\": false,\n  \"message\": \"Has alcanzado el límite de procesamiento diario\",\n  \"detail\": \"Por favor, intenta de nuevo mañana o introduce los datos de la factura manualmente\",\n  \"error_type\": \"rate_limit_exceeded\",\n  \"limits\": {\n    \"gpt-4o-mini\": \"100 peticiones/día\",\n    \"gpt-4o-latest\": \"10 peticiones/día\"\n  },\n  \"retry_after\": \"Mañana a las 00:00\"\n}",
+          "options": {
+            "responseCode": 429,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Retry-After",
+                  "value": "86400"
+                }
+              ]
+            }
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          1008,
+          3280
+        ],
+        "id": "2b4f95fe-0ac7-4248-bfd8-a4f534213765",
+        "name": "Respond Rate Limit Error"
+      }
+    ],
+    "connections": {
+      "Webhook": {
+        "main": [
+          [
+            {
+              "node": "Upload a file",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upload a file": {
+        "main": [
+          [
+            {
+              "node": "Build Prompt & Rate Limit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Message a model": {
+        "main": [
+          [
+            {
+              "node": "Format OpenAI response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upsert Client": {
+        "main": [
+          [
+            {
+              "node": "Postgres Invoices",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Switch": {
+        "main": [
+          [
+            {
+              "node": "Upsert Client",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Upsert Provider",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Upsert Provider": {
+        "main": [
+          [
+            {
+              "node": "Postgres Received Invoices",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate AI Response": {
+        "main": [
+          [
+            {
+              "node": "Check Validation Status",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Validation Status": {
+        "main": [
+          [
+            {
+              "node": "Build Prompt & Rate Limit",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Is Validation Success?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Is Validation Success?": {
+        "main": [
+          [
+            {
+              "node": "Switch",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Postgres Received Invoices": {
+        "main": [
+          [
+            {
+              "node": "Respond Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Postgres Invoices": {
+        "main": [
+          [
+            {
+              "node": "Respond Success",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format OpenAI response": {
+        "main": [
+          [
+            {
+              "node": "Validate AI Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Prompt & Rate Limit": {
+        "main": [
+          [
+            {
+              "node": "If",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If": {
+        "main": [
+          [
+            {
+              "node": "Respond Rate Limit Error",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Message a model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "authors": "Juan Carlos Sastre Iglesias",
+    "name": null,
+    "description": null
+  }
+}

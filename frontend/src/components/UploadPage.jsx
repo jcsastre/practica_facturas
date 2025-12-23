@@ -52,8 +52,8 @@ export function UploadPage() {
     formData.append('type', type);
 
     try {
-      // Replace with your actual n8n webhook URL for upload
-      const webhookUrl = 'https://fdp-n8n.odyw27.easypanel.host/webhook/83fa05c6-e044-4abc-89bd-e470ff08b7d1'; 
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://fdp-n8n.odyw27.easypanel.host/webhook';
+      const webhookUrl = `${apiBase}/83fa05c6-e044-4abc-89bd-e470ff08b7d1`; 
         
       console.log('Webhook URL:', webhookUrl); 
 

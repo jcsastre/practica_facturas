@@ -25,7 +25,8 @@ export function ExpensesPage() {
   const fetchExpenses = async () => {
     try {
       setLoading(true);
-      const apiUrl = 'https://fdp-n8n.odyw27.easypanel.host/webhook/api/received-invoices';
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://fdp-n8n.odyw27.easypanel.host/webhook';
+    const apiUrl = `${apiBase}/api/received-invoices`;
       
       const res = await fetch(apiUrl);
       const data = await res.json();
@@ -179,7 +180,7 @@ export function ExpensesPage() {
                 </div>
                 <div style={{ color: 'var(--text-muted)' }}>{new Date(inv.issue_date).toLocaleDateString('es-ES')}</div>
                 <div style={{ textAlign: 'right', fontWeight: 'bold', fontSize: '1.1rem', color: '#f472b6' }}>
-                  -{parseFloat(inv.total_amount).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                  -{new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', useGrouping: true }).format(Number(inv.total_amount || 0))}
                 </div>
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ padding: '0.25rem 0.75rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 'bold', background: `${getStatusColor(inv.status)}20`, color: getStatusColor(inv.status), border: `1px solid ${getStatusColor(inv.status)}40` }}>

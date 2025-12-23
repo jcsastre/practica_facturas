@@ -4,6 +4,25 @@ export function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const formatCurrency = (val) => {
+    const num = typeof val === 'number' ? val : parseFloat(val || 0);
+    return new Intl.NumberFormat('es-ES', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 2,
+      useGrouping: true
+    }).format(num);
+  };
+
+  const formatNumber = (val) => {
+    const num = typeof val === 'number' ? val : parseFloat(val || 0);
+    return new Intl.NumberFormat('es-ES', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useGrouping: true
+    }).format(num);
+  };
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
@@ -11,56 +30,44 @@ export function Dashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      // Simulación de datos para demostración (Fake Data)
-      const fakeData = {
-        stats: {
-          total_income: 12540.50,
-          total_expenses: 4320.25,
-          vat_to_pay: 1725.10
-        },
-        recent: [
-          {
-            id: "1",
-            type: "income",
-            entity_name: "Clínica Salud Integral, S.L.",
-            invoice_number: "EMI-2025-001",
-            total_amount: 907.50,
-            created_at: "2025-01-08T10:00:00Z",
-            status: "processed"
-          },
-          {
-            id: "2",
-            type: "expense",
-            entity_name: "Amazon Web Services",
-            invoice_number: "PROV-2025-003",
-            total_amount: 254.10,
-            created_at: "2025-01-05T15:30:00Z",
-            status: "processed"
-          },
-          {
-            id: "3",
-            type: "income",
-            entity_name: "Tech Solutions S.L.",
-            invoice_number: "EMI-2025-002",
-            total_amount: 1540.00,
-            created_at: "2024-12-28T12:00:00Z",
-            status: "processed"
-          },
-          {
-            id: "4",
-            type: "expense",
-            entity_name: "Google Cloud",
-            invoice_number: "GCP-9921",
-            total_amount: 120.45,
-            created_at: "2024-12-20T09:15:00Z",
-            status: "processed"
-          }
-        ]
-      };
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'https://fdp-n8n.odyw27.easypanel.host/webhook';
+      const apiUrl = `${apiBase}/api/dashboard-stats`;
+      const res = await fetch(apiUrl);
+      const dashboardData = await res.json();
       
-      // Simulamos un pequeño retraso de red
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setData(fakeData);
+      // Fetch recent activity from existing endpoints to complement the dashboard
+      const issuedRes = await fetch(`${apiBase}/api/issued-invoices`);
+      const receivedRes = await fetch(`${apiBase}/api/received-invoices`);
+      
+      const issued = await issuedRes.json();
+      const received = await receivedRes.json();
+
+      const extract = (obj) => {
+        if (!obj) return [];
+        if (Array.isArray(obj)) {
+          if (obj.length === 1 && Array.isArray(obj[0])) return extract(obj[0]);
+          return obj.map(item => (item && item.json) ? (Array.isArray(item.json.data) ? item.json.data : item.json) : item).flat();
+        }
+        if (typeof obj === 'object') {
+          if (Array.isArray(obj.data)) return obj.data;
+          if (obj.json && Array.isArray(obj.json)) return obj.json;
+          return [obj];
+        }
+        return [];
+      };
+
+      const allRecent = [
+        ...extract(issued).map(inv => ({ ...inv, type: 'income' })),
+        ...extract(received).map(inv => ({ ...inv, type: 'expense' }))
+      ];
+      
+      allRecent.sort((a, b) => new Date(b.issue_date || 0) - new Date(a.issue_date || 0));
+
+      setData({
+        stats: dashboardData.stats,
+        quarterly_vat: dashboardData.quarterly_vat,
+        recent: allRecent.slice(0, 5)
+      });
     } catch (error) {
       console.error('Error dashboard:', error);
     } finally {
@@ -94,66 +101,121 @@ export function Dashboard() {
   
   if (!data) return <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>Error cargando datos</div>;
 
-  const netProfit = data.stats.total_income - data.stats.total_expenses;
+  const netProfit = data.stats.net_profit;
 
   return (
     <>
-      <div className="grid grid-cols-3" style={{ marginBottom: '2.5rem' }}>
+      <div className="grid grid-cols-4" style={{ marginBottom: '2.5rem' }}>
         <StatCard 
           title="Ingresos Totales" 
-          value={data.stats.total_income.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} 
-          trend="Facturación acumulada"
+          value={formatCurrency(data.stats.total_income)} 
+          trend="Facturación bruta"
           icon="📈"
           color="var(--success)"
           delay="0s"
         />
         <StatCard 
           title="Gastos Totales" 
-          value={data.stats.total_expenses.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} 
-          trend="Gastos acumulados"
+          value={formatCurrency(data.stats.total_expenses)} 
+          trend="Gastos operativos"
           icon="📊"
           color="var(--danger)"
           delay="0.1s"
         />
         <StatCard 
-          title="IVA a Pagar (Est.)" 
-          value={data.stats.vat_to_pay.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} 
-          trend="Repercutido - Soportado"
+          title="Beneficio Neto" 
+          value={formatCurrency(data.stats.net_profit)} 
+          trend="Margen de beneficio"
+          icon="💎"
+          color="var(--primary)"
+          delay="0.2s"
+        />
+        <StatCard 
+          title="IVA a Pagar" 
+          value={formatCurrency(data.stats.vat_to_pay)} 
+          trend="Saldo IVA global"
           icon="💰"
           color="var(--warning)"
-          delay="0.2s"
+          delay="0.3s"
         />
       </div>
 
-      {/* Net Profit Banner */}
-      <div className="card glass-panel animate-scale-in" style={{ 
-        marginBottom: '2rem',
-        background: netProfit >= 0 
-          ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%)'
-          : 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%)',
-        border: `1px solid ${netProfit >= 0 ? 'var(--success-glow)' : 'rgba(239, 68, 68, 0.2)'}`,
-        padding: '1.5rem',
-        textAlign: 'center',
-        animationDelay: '0.3s'
-      }}>
-        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: '500' }}>
-          Beneficio Neto
+      <div className="grid grid-cols-3" style={{ gap: '2rem', marginBottom: '2rem' }}>
+        {/* Quarterly VAT Breakdown */}
+        <div className="card glass-panel animate-slide-in col-span-2" style={{ padding: '1.5rem', animationDelay: '0.4s' }}>
+          <h3 style={{ margin: '0 0 1.5rem', fontSize: '1.1rem', fontWeight: '700' }}>Resumen Trimestral de IVA</h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '1rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Trimestre</th>
+                  <th style={{ textAlign: 'right', padding: '1rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>IVA Repercutido</th>
+                  <th style={{ textAlign: 'right', padding: '1rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>IVA Soportado</th>
+                  <th style={{ textAlign: 'right', padding: '1rem 0.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.quarterly_vat.map((q) => (
+                  <tr key={q.quarter} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
+                    <td style={{ padding: '1rem 0.5rem', fontWeight: '600' }}>{q.quarter}</td>
+                    <td style={{ padding: '1rem 0.5rem', textAlign: 'right', color: 'var(--success)' }}>
+                      +{formatNumber(q.income_vat)}€
+                    </td>
+                    <td style={{ padding: '1rem 0.5rem', textAlign: 'right', color: 'var(--danger)' }}>
+                      -{formatNumber(q.expense_vat)}€
+                    </td>
+                    <td style={{ 
+                      padding: '1rem 0.5rem', 
+                      textAlign: 'right', 
+                      fontWeight: '700',
+                      color: q.balance >= 0 ? 'var(--warning)' : 'var(--success)'
+                    }}>
+                      {formatNumber(q.balance)}€
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div style={{ 
-          fontSize: '2.5rem', 
-          fontWeight: '800', 
-          color: netProfit >= 0 ? 'var(--success)' : 'var(--danger)',
-          letterSpacing: '-0.02em'
+
+        {/* Net Profit Banner */}
+        <div className="card glass-panel animate-scale-in" style={{ 
+          background: netProfit >= 0 
+            ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(34, 197, 94, 0.05) 100%)'
+            : 'linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%)',
+          border: `1px solid ${netProfit >= 0 ? 'var(--success-glow)' : 'rgba(239, 68, 68, 0.2)'}`,
+          padding: '1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          textAlign: 'center',
+          animationDelay: '0.5s'
         }}>
-          {netProfit.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
-        </div>
-        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-          {netProfit >= 0 ? '✓ ' : '⚠ '}
-          Ingresos {netProfit >= 0 ? 'superiores' : 'inferiores'} a los gastos
+          <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: '500' }}>
+            Estado del Negocio
+          </div>
+          <div style={{ 
+            fontSize: '2rem', 
+            fontWeight: '800', 
+            color: netProfit >= 0 ? 'var(--success)' : 'var(--danger)',
+            letterSpacing: '-0.02em',
+            marginBottom: '0.5rem'
+          }}>
+            {netProfit >= 0 ? 'SALDO POSITIVO' : 'SALDO NEGATIVO'}
+          </div>
+          <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+            {formatCurrency(netProfit)}
+          </div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '1rem' }}>
+            {netProfit >= 0 
+              ? 'Tus ingresos actuales superan los gastos acumulados.' 
+              : 'Atención: Los gastos acumulados superan los ingresos.'}
+          </div>
         </div>
       </div>
 
-      <div className="card glass-panel animate-slide-in" style={{ padding: '2rem', animationDelay: '0.4s' }}>
+      <div className="card glass-panel animate-slide-in" style={{ padding: '2rem', animationDelay: '0.6s' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
           <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: '700' }}>Actividad Reciente</h3>
           <div style={{ 
@@ -164,14 +226,14 @@ export function Dashboard() {
             color: 'var(--primary)',
             fontWeight: '600'
           }}>
-            {data.recent.length} transacciones
+            Últimas {data.recent.length} facturas
           </div>
         </div>
         
         <div style={{ display: 'grid', gap: '0.75rem' }}>
-          {data.recent.map((item, index) => (
+          {data.recent.length > 0 ? data.recent.map((item, index) => (
             <div 
-              key={item.id} 
+              key={`${item.type}-${item.id}`} 
               className="animate-fade-in"
               style={{ 
                 display: 'flex', 
@@ -182,23 +244,12 @@ export function Dashboard() {
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border)',
                 transition: 'all 0.2s ease',
-                cursor: 'pointer',
-                animationDelay: `${0.5 + index * 0.1}s`
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateX(4px)';
-                e.currentTarget.style.borderColor = 'var(--border-hover)';
-                e.currentTarget.style.background = 'var(--bg-surface-elevated)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateX(0)';
-                e.currentTarget.style.borderColor = 'var(--border)';
-                e.currentTarget.style.background = 'var(--bg-surface)';
+                animationDelay: `${0.7 + index * 0.1}s`
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1 }}>
                 <div style={{ 
-                  fontSize: '1.75rem',
+                  fontSize: '1.5rem',
                   background: item.type === 'income' 
                     ? 'var(--success-glow)' 
                     : 'rgba(239, 68, 68, 0.15)',
@@ -207,33 +258,36 @@ export function Dashboard() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '48px',
-                  height: '48px'
+                  width: '40px',
+                  height: '40px'
                 }}>
                   {item.type === 'income' ? '📈' : '📉'}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '600', fontSize: '0.95rem', marginBottom: '0.25rem' }}>
-                    {item.entity_name}
+                  <div style={{ fontWeight: '600', fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+                    {item.entity_name || 'Sin nombre'}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                     <span>{item.invoice_number}</span>
                     <span style={{ opacity: 0.5 }}>•</span>
-                    <span>{new Date(item.created_at).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                    <span>{item.issue_date ? new Date(item.issue_date).toLocaleDateString('es-ES') : 'N/A'}</span>
                   </div>
                 </div>
               </div>
               <div style={{ 
                 fontWeight: '700', 
-                fontSize: '1.1rem',
+                fontSize: '1rem',
                 color: item.type === 'income' ? 'var(--success)' : 'var(--danger)',
-                textAlign: 'right',
-                minWidth: '120px'
+                textAlign: 'right'
               }}>
-                {item.type === 'income' ? '+' : '−'}{Number(item.total_amount).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}
+                {item.type === 'income' ? '+' : '−'}{formatCurrency(item.total_amount)}
               </div>
             </div>
-          ))}
+          )) : (
+            <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+              No hay actividad reciente para mostrar.
+            </div>
+          )}
         </div>
       </div>
     </>

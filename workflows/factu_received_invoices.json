@@ -28,7 +28,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n  ri.category,\n  p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
+        "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n    p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
         "options": {}
       },
       "id": "fbf69e63-b37a-4541-9642-3a50f211f634",
@@ -219,7 +219,7 @@
       {
         "parameters": {
           "operation": "executeQuery",
-          "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n  ri.category,\n  p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
+          "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n    p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
           "options": {}
         },
         "id": "fbf69e63-b37a-4541-9642-3a50f211f634",

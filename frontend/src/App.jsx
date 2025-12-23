@@ -19,7 +19,7 @@ function App() {
             Dashboard
           </button>
           <button className={`btn ${activeTab === 'upload' ? 'btn-primary' : 'btn-nav'}`} onClick={() => setActiveTab('upload')}>
-            Subir PDF
+            Subir Factura
           </button>
           <button className={`btn ${activeTab === 'invoices' ? 'btn-primary' : 'btn-nav'}`} onClick={() => setActiveTab('invoices')}>
             Ingresos
