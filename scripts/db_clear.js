@@ -1,7 +1,7 @@
 const { Client } = require('pg');
 
-// Configuración recuperada del entorno del proyecto
-const connectionString = 'postgres://postgres:8812f52950a4b3ba5f09@fdp-n8n.odyw27.easypanel.host:5432/postgres';
+// Configuración recuperada del entorno (usar variable de entorno para seguridad)
+const connectionString = process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/postgres';
 
 async function clearDatabase() {
   const client = new Client({ connectionString });
