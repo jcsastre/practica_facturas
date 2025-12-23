@@ -1,44 +1,71 @@
-# Práctica n8n – Sistema de Gestión de Facturas y Gastos
+# FactuIA – Sistema de Gestión de Facturas Inteligente
 
-Este proyecto implementa un sistema automatizado para la gestión de facturas y gastos utilizando **n8n** y **PostgreSQL**, con integración de **IA** avanzada para el procesamiento inteligente de documentos.
+FactuIA es una plataforma integral para la gestión automatizada de facturas y contabilidad simplificada. Utiliza **Inteligencia Artificial** (OpenAI), **n8n** para la orquestación de flujos y **PostgreSQL** para el almacenamiento persistente.
 
-## 🚀 Componentes Principales
+## 🌟 Características Principales
 
-### 1. Frontend (React + Vite)
-Localizado en la carpeta `/frontend`. Una interfaz moderna que permite:
-*   Subir facturas en formato PDF.
-*   Seleccionar el tipo de documento (Ingreso o Gasto).
-*   Visualizar feedback en tiempo real del proceso de extracción.
+### 📊 Dashboard Estratégico
+- **Métricas en Tiempo Real**: Visualización inmediata de Ingresos Totales, Gastos Totales e IVA global.
+- **Resumen Trimestral de IVA**: Desglose automático de IVA Repercutido vs. Soportado por trimestres (Q1-Q4).
+- **Indicador de Salud**: Alertas visuales sobre el estado del beneficio neto.
+- **Formato Profesional**: Cifras formateadas según el estándar contable español (separador de miles por punto y decimales por coma).
 
-### 2. Automatización (n8n)
-Ubicado en `/workflows`. El motor lógico del sistema. El flujo más crítico es el **Upload PDF**, que utiliza una arquitectura de **"Model Cascading"**:
-*   **Primer Intento (Eficiencia)**: Utiliza **GPT-4o-mini** para una extracción rápida y económica.
-*   **Validación Inteligente**: Un nodo de código verifica la coherencia matemática (Base + IVA = Total), el formato de NIFs españoles y fechas.
-*   **Segundo Intento (Rescate)**: Si la validación falla, se activa automáticamente **GPT-4o-latest** (modelo premium). Este recibe los errores exactos del primer intento y actúa como un "auditor senior" para corregir los datos antes de guardarlos.
-*   **Control de Costes**: Se ha implementado un **Rate Limiting** diario (100 peticiones para `mini` y 10 para `latest`) que bloquea el procesamiento si se excede el uso, evitando costes inesperados de la API de OpenAI.
+### 🤖 Procesamiento IA de Doble Capa
+- **Extracción Inteligente**: Subida de facturas con detección automática de datos fiscales.
+- **Arquitectura de Rescate (Model Cascading)**:
+  - **Eficiencia**: Intento inicial con `gpt-4o-mini`.
+  - **Auditoría**: Validación automática de coherencia matemática, NIFs y fechas.
+  - **Precisión**: Reintento automático con `gpt-4o-latest` si se detectan errores, actuando como un auditor senior.
+- **Control de Consumo**: Sistema de *Rate Limiting* integrado para evitar costes excesivos en la API de OpenAI.
 
-### 3. Base de Datos (PostgreSQL)
-Ubicada en un servidor remoto. El esquema (`init.sql`) organiza la información en:
-*   `clients` y `providers`: Gestión de entidades fiscales.
-*   `issued_invoices` y `received_invoices`: Registro de transacciones con integridad referencial.
+### 💼 Gestión Contable
+- **Ingresos y Gastos**: Listados dedicados con filtrado por fechas.
+- **Validación de Identidad**: Soporta NIFs españoles e internacionales (5-20 caracteres).
+- **Entidades**: Gestión automática de Clientes y Proveedores mediante deduplicación por NIF.
 
-## 🛠️ Utilidades de Desarrollo
+## � Tecnologías
 
-Se ha incluido una carpeta `/scripts` con herramientas para facilitar el mantenimiento:
-*   `db_clear.js`: Limpia todas las tablas de la base de datos y reinicia los contadores de ID automáticamente.
+- **Frontend**: React 19, Vite, Vanilla CSS (Premium Aesthetics).
+- **Backend/Automation**: n8n (Remote instance).
+- **Database**: PostgreSQL (Easypanel).
+- **Deployment**: Vercel (Frontend) & GitHub (Source Control).
 
-## ⚙️ Configuración y Ejecución
+## 🛠️ Instalación y Configuración
 
-### Frontend
-1. Entrar en la carpeta: `cd frontend`
-2. Instalar dependencias: `npm install`
-3. Ejecutar: `npm run dev`
+### 1. Requisitos Previos
+- Node.js instalado.
+- GitHub CLI (`gh`) configurado (opcional, para gestión remota).
 
-### Base de Datos
-Para limpiar la base de datos de pruebas:
+### 2. Configuración del Frontend
+1. Entra en la carpeta del frontend:
+   ```bash
+   cd frontend
+   ```
+2. Instalar dependencias:
+   ```bash
+   npm install
+   ```
+3. Crea un archivo `.env` o configura las variables en tu proveedor de hosting (Vercel):
+   ```env
+   VITE_API_BASE_URL=https://tu-servidor-n8n/webhook
+   ```
+4. Ejecuta el entorno de desarrollo:
+   ```bash
+   npm run dev
+   ```
+
+### 3. Base de Datos
+El esquema inicial se encuentra en `init.sql`. Para limpiezas de mantenimiento en desarrollo:
 ```bash
-node scripts/db_clear.js
+DATABASE_URL=tu_url_postgres node scripts/db_clear.js
 ```
 
-## 📊 Arquitectura de Datos
-El sistema garantiza que no se introducen datos incoherentes mediante el proceso de validación cruzada entre la IA y reglas de negocio contables españolas, forzando valores `null` en lugar de textos genéricos para facilitar la gestión manual posterior si fuera necesaria.
+## � Seguridad
+- **Variables de Entorno**: El proyecto está configurado para no exponer credenciales en el código fuente.
+- **Validación de Datos**: Las facturas pasan por un nodo de validación estricto antes de ser persistidas en la base de datos.
+
+## 📦 Despliegue
+El proyecto está optimizado para ser desplegado en **Vercel** conectando directamente el repositorio de GitHub. Las actualizaciones son automáticas (`CI/CD`) con cada *push* a la rama `main`.
+
+---
+*Desarrollado con ❤️ para la gestión contable moderna.*
