@@ -155,7 +155,7 @@
             "userId": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
             "projectId": "PChSnDXpHbIycoV4",
             "user": {
-              "updatedAt": "2025-12-21T07:38:40.000Z",
+              "updatedAt": "2025-12-23T12:00:24.000Z",
               "createdAt": "2025-12-09T15:10:49.925Z",
               "id": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
               "email": "juan.carlos.sastre.iglesias@gmail.com",
@@ -183,7 +183,7 @@
               },
               "disabled": false,
               "mfaEnabled": false,
-              "lastActiveAt": "2025-12-21",
+              "lastActiveAt": "2025-12-23",
               "isPending": false
             }
           }

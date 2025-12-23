@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2025-12-21T15:59:43.655Z",
+  "updatedAt": "2025-12-23T12:03:25.254Z",
   "createdAt": "2025-12-21T15:58:47.522Z",
   "id": "A8a4j1ApyxAlFBR7",
   "name": "Factu - Received Invoices",
@@ -28,7 +28,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n    p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
+        "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n  p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
         "options": {}
       },
       "id": "fbf69e63-b37a-4541-9642-3a50f211f634",
@@ -129,9 +129,9 @@
   "staticData": null,
   "meta": null,
   "pinData": {},
-  "versionId": "c08f2d73-1214-47b8-9f14-6314d753f069",
-  "activeVersionId": "c08f2d73-1214-47b8-9f14-6314d753f069",
-  "versionCounter": 3,
+  "versionId": "e9a4ade9-05f5-462b-90fc-98bac23f7207",
+  "activeVersionId": "e9a4ade9-05f5-462b-90fc-98bac23f7207",
+  "versionCounter": 5,
   "triggerCount": 1,
   "shared": [
     {
@@ -155,7 +155,7 @@
             "userId": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
             "projectId": "PChSnDXpHbIycoV4",
             "user": {
-              "updatedAt": "2025-12-21T07:38:40.000Z",
+              "updatedAt": "2025-12-23T12:00:24.000Z",
               "createdAt": "2025-12-09T15:10:49.925Z",
               "id": "d2dd8e60-551d-49af-96b4-f38e848d31bd",
               "email": "juan.carlos.sastre.iglesias@gmail.com",
@@ -183,7 +183,7 @@
               },
               "disabled": false,
               "mfaEnabled": false,
-              "lastActiveAt": "2025-12-21",
+              "lastActiveAt": "2025-12-23",
               "isPending": false
             }
           }
@@ -193,9 +193,9 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2025-12-21T15:58:47.530Z",
-    "createdAt": "2025-12-21T15:58:47.530Z",
-    "versionId": "c08f2d73-1214-47b8-9f14-6314d753f069",
+    "updatedAt": "2025-12-23T12:03:25.255Z",
+    "createdAt": "2025-12-23T12:03:25.255Z",
+    "versionId": "e9a4ade9-05f5-462b-90fc-98bac23f7207",
     "workflowId": "A8a4j1ApyxAlFBR7",
     "nodes": [
       {
@@ -219,7 +219,7 @@
       {
         "parameters": {
           "operation": "executeQuery",
-          "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n    p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
+          "query": "SELECT \n  ri.id,\n  'expense' as type,\n  ri.invoice_number,\n  ri.issue_date,\n  ri.base_amount,\n  ri.tax_rate,\n  ri.tax_amount,\n  ri.total_amount,\n  ri.status,\n  p.name as entity_name,\n  p.nif_cif as entity_nif,\n  p.address as entity_address\nFROM received_invoices ri\nLEFT JOIN providers p ON ri.provider_id = p.id\nORDER BY ri.issue_date DESC;",
           "options": {}
         },
         "id": "fbf69e63-b37a-4541-9642-3a50f211f634",
